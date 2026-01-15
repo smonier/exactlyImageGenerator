@@ -38,7 +38,8 @@
     "noStyles": "Aucun style trouvé",
     "syncFirst": "Cliquez sur 'Synchroniser depuis Exactly.ai' pour charger vos styles",
     "lastSynced": "Dernière synchronisation",
-    "selected": "Style sélectionné"
+    "selected": "Style sélectionné",
+    "trainingProgress": "Progression de l'entraînement"
   },
   
   "train": {

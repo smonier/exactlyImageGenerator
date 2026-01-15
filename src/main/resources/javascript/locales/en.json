@@ -38,7 +38,8 @@
     "noStyles": "No styles found",
     "syncFirst": "Click 'Sync from Exactly.ai' to load your styles",
     "lastSynced": "Last synced",
-    "selected": "Selected style"
+    "selected": "Selected style",
+    "trainingProgress": "Training progress"
   },
   
     "train": {

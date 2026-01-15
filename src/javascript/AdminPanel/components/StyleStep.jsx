@@ -10,7 +10,7 @@ import React, {useState, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation, useQuery} from '@apollo/client';
 import {Button, Typography, Loader, Input} from '@jahia/moonstone';
-import {SYNC_EXACTLY_STYLES, CREATE_EXACTLY_STYLE, DELETE_EXACTLY_STYLE, GET_STYLES} from '../../graphql/operations';
+import {SYNC_EXACTLY_STYLES, CREATE_EXACTLY_STYLE, DELETE_EXACTLY_STYLE, GET_STYLES, GET_TRAINING_PROGRESS} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
 import './StyleStep.css';
 
@@ -25,6 +25,7 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newStyleName, setNewStyleName] = useState('');
     const [newStyleDescription, setNewStyleDescription] = useState('');
+    const [trainingProgress, setTrainingProgress] = useState({}); // Track progress per style UUID
 
     // Build the path for the current site
     const siteKey = getSiteKey();
@@ -90,6 +91,9 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
         }
     });
 
+    // Get training progress mutation
+    const [getProgress] = useMutation(GET_TRAINING_PROGRESS);
+
     const handleSync = () => {
         syncStyles({
             variables: {
@@ -145,6 +149,34 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
                 };
             });
             setStyles(loadedStyles);
+            
+            // Check training progress for styles with 'training' status (only once on page load)
+            loadedStyles.forEach(style => {
+                if (style.status === 'training') {
+                    getProgress({
+                        variables: {
+                            styleUuid: style.uuid
+                        }
+                    }).then(result => {
+                        if (result?.data?.exactly?.getTrainingProgress?.successful) {
+                            try {
+                                const progress = JSON.parse(result.data.exactly.getTrainingProgress.message);
+                                setTrainingProgress(prev => ({
+                                    ...prev,
+                                    [style.uuid]: {
+                                        status: progress.status,
+                                        progress: progress.progress
+                                    }
+                                }));
+                            } catch (e) {
+                                console.error('Failed to parse training progress:', e);
+                            }
+                        }
+                    }).catch(error => {
+                        console.error('Error fetching training progress:', error);
+                    });
+                }
+            });
         }
     }, [jcrData]);
 
@@ -243,6 +275,11 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
                                     </div>
                                     <div className="style-card__meta">
                                         <StatusBadge status={style.status}/>
+                                        {trainingProgress[style.uuid] && (
+                                            <Typography variant="caption" className="style-card__progress">
+                                                {t('style.trainingProgress')}: {trainingProgress[style.uuid].progress}%
+                                            </Typography>
+                                        )}
                                         {style.lastSynced && (
                                             <Typography variant="caption" className="style-card__synced">
                                                 {t('style.lastSynced')}: {new Date(style.lastSynced).toLocaleString()}
