@@ -1,0 +1,22 @@
+# Intellij
+.idea
+!.idea/jsLinters/**
+!.idea/prettier.xml
+*.iml
+*.ipr
+.vscode
+
+# Node
+dist
+node_modules
+node
+
+# Yarn
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+.env

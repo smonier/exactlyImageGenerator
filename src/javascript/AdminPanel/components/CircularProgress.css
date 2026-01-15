@@ -1,0 +1,57 @@
+/* Circular Progress Styles */
+
+.circular-progress {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.circular-progress__svg {
+    transform: rotate(0deg);
+}
+
+.circular-progress__bg {
+    fill: none;
+    stroke: #e0e0e0;
+    stroke-linecap: round;
+}
+
+.circular-progress__bar {
+    fill: none;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 0.6s ease, stroke 0.3s ease;
+}
+
+.circular-progress__bar.complete {
+    animation: pulse 1s ease-in-out;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+.circular-progress__text {
+    position: absolute;
+    display: flex;
+    align-items: baseline;
+    justify-content: center;
+    font-weight: 600;
+    transition: color 0.3s ease;
+}
+
+.circular-progress__number {
+    font-size: 32px;
+    line-height: 1;
+}
+
+.circular-progress__percent {
+    font-size: 18px;
+    margin-left: 2px;
+    opacity: 0.8;
+}

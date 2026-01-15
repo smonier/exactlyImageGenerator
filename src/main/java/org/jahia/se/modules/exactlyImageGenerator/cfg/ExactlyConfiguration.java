@@ -1,0 +1,61 @@
+package org.jahia.se.modules.exactlyImageGenerator.cfg;
+
+import org.osgi.service.cm.ConfigurationException;
+import org.osgi.service.cm.ManagedService;
+import org.osgi.service.component.annotations.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Dictionary;
+
+/**
+ * OSGi configuration handler for Exactly.ai API settings
+ * PID: org.jahia.se.modules.exactlyImageGenerator
+ */
+@Component(service = {ExactlyConfiguration.class, ManagedService.class}, property = "service.pid=org.jahia.se.modules.exactlyImageGenerator", immediate = true)
+public class ExactlyConfiguration implements ManagedService {
+    
+    private static final Logger logger = LoggerFactory.getLogger(ExactlyConfiguration.class);
+    
+    private static final String PROP_API_TOKEN = "exactly.api.token";
+    private static final String PROP_API_BASE_URL = "exactly.api.baseUrl";
+    private static final String DEFAULT_BASE_URL = "https://api.exactly.ai";
+    
+    private volatile String apiToken;
+    private volatile String apiBaseUrl = DEFAULT_BASE_URL;
+    
+    @Override
+    public void updated(Dictionary<String, ?> properties) throws ConfigurationException {
+        if (properties != null) {
+            Object token = properties.get(PROP_API_TOKEN);
+            Object baseUrl = properties.get(PROP_API_BASE_URL);
+            
+            if (token == null || token.toString().trim().isEmpty()) {
+                logger.warn("Exactly API token is not configured. Module functionality will be limited.");
+            } else {
+                this.apiToken = token.toString().trim();
+                logger.info("Exactly API token configured (length: {})", apiToken.length());
+            }
+            
+            if (baseUrl != null && !baseUrl.toString().trim().isEmpty()) {
+                this.apiBaseUrl = baseUrl.toString().trim();
+            } else {
+                this.apiBaseUrl = DEFAULT_BASE_URL;
+            }
+            
+            logger.info("Exactly API base URL: {}", apiBaseUrl);
+        }
+    }
+    
+    public String getApiToken() {
+        return apiToken;
+    }
+    
+    public String getApiBaseUrl() {
+        return apiBaseUrl;
+    }
+    
+    public boolean isConfigured() {
+        return apiToken != null && !apiToken.trim().isEmpty();
+    }
+}

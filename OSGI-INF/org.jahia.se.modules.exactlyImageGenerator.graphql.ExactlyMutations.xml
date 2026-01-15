@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<scr:component xmlns:scr="http://www.osgi.org/xmlns/scr/v1.3.0" name="org.jahia.se.modules.exactlyImageGenerator.graphql.ExactlyMutations" immediate="true">
+  <service>
+    <provide interface="org.jahia.se.modules.exactlyImageGenerator.graphql.ExactlyMutations"/>
+  </service>
+  <reference name="damService" interface="org.jahia.se.modules.exactlyImageGenerator.services.DamService" field="damService"/>
+  <reference name="exactlyService" interface="org.jahia.se.modules.exactlyImageGenerator.services.ExactlyService" field="exactlyService"/>
+  <reference name="projectRepository" interface="org.jahia.se.modules.exactlyImageGenerator.services.JcrProjectRepository" field="projectRepository"/>
+  <reference name="styleRepository" interface="org.jahia.se.modules.exactlyImageGenerator.services.JcrStyleRepository" field="styleRepository"/>
+  <implementation class="org.jahia.se.modules.exactlyImageGenerator.graphql.ExactlyMutations"/>
+</scr:component>

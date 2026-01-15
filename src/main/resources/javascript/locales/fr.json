@@ -1,0 +1,112 @@
+{
+  "label": "Générateur d'images Exactly.ai",
+  "hello": "Bonjour",
+  
+  "app": {
+    "title": "Générateur d'images Exactly.ai",
+    "subtitle": "Entraînez des modèles IA personnalisés et générez des images pour votre contenu",
+    "confirmReset": "Êtes-vous sûr de vouloir réinitialiser l'assistant ? Toute la progression sera perdue."
+  },
+  
+  "actions": {
+    "back": "Précédent",
+    "next": "Suivant",
+    "reset": "Réinitialiser",
+    "cancel": "Annuler",
+    "save": "Enregistrer",
+    "close": "Fermer",
+    "create": "Créer"
+  },
+  
+  "steps": {
+    "style": "Sélectionner le style",
+    "train": "Entraîner le modèle",
+    "generate": "Générer et enregistrer"
+  },
+  
+  "style": {
+    "title": "Sélectionner un style/modèle IA",
+    "description": "Synchronisez vos styles Exactly.ai et sélectionnez-en un pour l'entraînement et la génération",
+    "syncButton": "Synchroniser depuis Exactly.ai",
+    "createButton": "Créer un nouveau style",
+    "createNewStyle": "Créer un nouveau style IA",
+    "namePlaceholder": "Nom du style (requis)",
+    "descriptionPlaceholder": "Description (optionnel)",
+    "confirmDelete": "Êtes-vous sûr de vouloir supprimer '{{name}}' ? Cela le supprimera également d'Exactly.ai.",
+    "syncing": "Synchronisation des styles depuis l'API Exactly...",
+    "loading": "Chargement des styles...",
+    "noStyles": "Aucun style trouvé",
+    "syncFirst": "Cliquez sur 'Synchroniser depuis Exactly.ai' pour charger vos styles",
+    "lastSynced": "Dernière synchronisation",
+    "selected": "Style sélectionné"
+  },
+  
+  "train": {
+    "title": "Entraîner le modèle IA",
+    "description": "Téléchargez des images d'entraînement depuis le DAM Jahia pour personnaliser votre modèle IA",
+    "targetStyle": "Style d'entraînement",
+    "selectAssets": "Sélectionner les images d'entraînement",    "loadingExisting": "Chargement des images d'entraînement existantes...",
+    "existingImages": "{{count}} images déjà téléversées sur Exactly.ai",    "openMediaPicker": "Sélectionner des images depuis le DAM",
+    "damPickerNote": "Point d'intégration : Ceci devrait utiliser le composant sélecteur DAM de Jahia. Pour l'instant, saisissez les UUID des ressources manuellement.",
+    "assetUuidPlaceholder": "Entrez l'UUID de la ressource DAM et appuyez sur Entrée",
+    "addAsset": "Ajouter une ressource",
+    "selectedAssets": "{{count}} ressources sélectionnées",
+    "uploadButton": "Télécharger les images vers Exactly.ai",
+    "uploading": "Téléversement...",
+    "startButton": "Démarrer l'entraînement",
+    "training": "Entraînement...",
+    "inProgress": "Entraînement en cours",
+    "putToDraft": "Remettre en brouillon",
+    "cancelTraining": "Annuler l'entraînement",
+    "statusTitle": "Statut de l'entraînement",
+    "jobId": "ID du travail",
+    "projectUuid": "UUID du projet",
+    "status": "Statut",
+    "progress": "Progrès",
+    "progressLabel": "Entraînement de votre modèle IA",
+    "complete": "Entraînement terminé !",
+    "skipInfo": "L'entraînement est facultatif. Vous pouvez ignorer cette étape si vous utilisez un style pré-entraîné."
+  },
+  
+  "generate": {
+    "title": "Générer des images",
+    "description": "Entrez un prompt pour générer des images IA en utilisant votre style sélectionné",
+    "usingStyle": "Utilisation du style",
+    "promptLabel": "Prompt d'image",
+    "promptPlaceholder": "Décrivez l'image que vous souhaitez générer (par ex., 'Un coucher de soleil sur les montagnes avec des couleurs vives')",
+    "optionsLabel": "Options de génération",
+    "numVariationsLabel": "Nombre de variations",
+    "aspectRatioLabel": "Format d'image",
+    "showAdvanced": "Afficher les options avancées",
+    "hideAdvanced": "Masquer les options avancées",
+    "paramsNote": "Entrez les paramètres JSON (facultatif)",
+    "paramsPlaceholder": "{\"num_images\": 4, \"quality\": \"high\"}",
+    "generateButton": "Générer des images",
+    "generating": "Génération...",
+    "resultsTitle": "{{count}} images générées",
+    "previewUnavailable": "Aperçu non disponible (CORS)",
+    "openExternal": "Ouvrir dans un nouvel onglet",
+    "saveTitle": "Enregistrer dans le DAM",
+    "saveNote": "Sélectionnez les images à enregistrer et choisissez un dossier cible dans Jahia DAM",
+    "targetFolder": "Chemin du dossier cible",
+    "selectFolder": "Sélectionner un dossier",
+    "saveButton": "Enregistrer {{count}} images dans le DAM",
+    "saving": "Enregistrement...",
+    "savedTitle": "✓ {{count}} ressources enregistrées dans le DAM"
+  },
+  
+  "errors": {
+    "loadStylesFailed": "Échec du chargement des styles depuis JCR",
+    "syncFailed": "Échec de la synchronisation des styles : {{message}}",
+    "createFailed": "Échec de la création du style : {{message}}",
+    "deleteFailed": "Échec de la suppression du style : {{message}}",
+    "uploadFailed": "Échec du téléchargement des images : {{message}}",
+    "trainingFailed": "Échec du démarrage de l'entraînement : {{message}}",
+    "noTrainingAssets": "Veuillez sélectionner au moins une ressource d'entraînement",
+    "generationFailed": "Échec de la génération des images : {{message}}",
+    "noPrompt": "Veuillez entrer un prompt",
+    "invalidJson": "JSON invalide dans le champ des paramètres",
+    "saveFailed": "Échec de l'enregistrement des images dans le DAM : {{message}}",
+    "noSelection": "Veuillez sélectionner au moins une image à enregistrer"
+  }
+}

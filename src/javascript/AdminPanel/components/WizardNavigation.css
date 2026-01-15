@@ -1,0 +1,100 @@
+/* Wizard Navigation Styles - Moonstone Design */
+
+.wizard-nav {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 32px;
+    padding: 0;
+}
+
+.wizard-nav__step {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px 16px;
+    background: var(--color-light);
+    border: 2px solid var(--color-gray_light);
+    border-radius: var(--spacing-medium);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    min-height: 140px;
+}
+
+.wizard-nav__step:hover {
+    border-color: var(--color-accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.wizard-nav__step--active {
+    background: var(--color-accent_lightest);
+    border-color: var(--color-accent);
+    box-shadow: 0 4px 12px rgba(64, 124, 255, 0.15);
+}
+
+.wizard-nav__step--completed {
+    background: var(--color-success_lightest);
+    border-color: var(--color-success);
+}
+
+.wizard-nav__step__icon-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--color-gray_lighter);
+    color: var(--color-gray_dark);
+    transition: all 0.2s ease;
+}
+
+.wizard-nav__step--active .wizard-nav__step__icon-wrapper {
+    background: var(--color-accent);
+    color: var(--color-light);
+}
+
+.wizard-nav__step--completed .wizard-nav__step__icon-wrapper {
+    background: var(--color-success);
+    color: var(--color-light);
+}
+
+.wizard-nav__step__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+}
+
+.wizard-nav__step__number {
+    color: var(--color-gray);
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.wizard-nav__step--active .wizard-nav__step__number {
+    color: var(--color-accent);
+}
+
+.wizard-nav__step--completed .wizard-nav__step__number {
+    color: var(--color-success);
+}
+
+.wizard-nav__step__label {
+    font-weight: 500;
+    color: var(--color-dark);
+}
+
+.wizard-nav__step--active .wizard-nav__step__label {
+    font-weight: 700;
+    color: var(--color-accent);
+}
+
+.wizard-nav__step--completed .wizard-nav__step__label {
+    color: var(--color-success_dark);
+}

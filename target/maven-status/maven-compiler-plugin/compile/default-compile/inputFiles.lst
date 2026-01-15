@@ -1,0 +1,13 @@
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlySyncResponseImpl.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/services/ExactlyService.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/util/JsonUtils.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/cfg/ExactlyConfiguration.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/services/DamService.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyGraphQLExtension.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/services/JcrStyleRepository.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyMutationsExtension.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/services/JcrProjectRepository.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyMutations.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlySyncResponse.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/graphql/GeneratedImageSelectionInput.java
+/Users/stephane/Runtimes/0.Modules/exactlyImageGenerator/src/main/java/org/jahia/se/modules/exactlyImageGenerator/proxy/ExactlyProxyClient.java

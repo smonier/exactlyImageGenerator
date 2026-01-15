@@ -1,0 +1,49 @@
+/* Exactly.ai Image Generator App Styles */
+
+.exactly-app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.exactly-app__header {
+    margin-bottom: 32px;
+}
+
+.exactly-app__subtitle {
+    margin-top: 8px;
+    color: #666;
+}
+
+.exactly-app__body {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+    width: 100%;
+    flex: 1;
+}
+
+.exactly-app__content {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    min-height: 400px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.exactly-app__footer {
+    margin-top: 24px;
+    padding-top: 16px;
+    border-top: 1px solid #e0e0e0;
+}
+
+.exactly-app__footer-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.exactly-app__footer-right {
+    display: flex;
+    gap: 12px;
+}

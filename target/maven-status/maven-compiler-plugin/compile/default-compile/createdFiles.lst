@@ -1,0 +1,13 @@
+org/jahia/se/modules/exactlyImageGenerator/services/JcrProjectRepository.class
+org/jahia/se/modules/exactlyImageGenerator/services/DamService.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyGraphQLExtension.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlySyncResponse.class
+org/jahia/se/modules/exactlyImageGenerator/util/JsonUtils.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyMutations.class
+org/jahia/se/modules/exactlyImageGenerator/services/ExactlyService.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlySyncResponseImpl.class
+org/jahia/se/modules/exactlyImageGenerator/cfg/ExactlyConfiguration.class
+org/jahia/se/modules/exactlyImageGenerator/services/JcrStyleRepository.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/ExactlyMutationsExtension.class
+org/jahia/se/modules/exactlyImageGenerator/graphql/GeneratedImageSelectionInput.class
+org/jahia/se/modules/exactlyImageGenerator/proxy/ExactlyProxyClient.class
