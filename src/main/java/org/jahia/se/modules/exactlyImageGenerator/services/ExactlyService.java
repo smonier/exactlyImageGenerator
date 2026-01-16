@@ -1,5 +1,6 @@
 package org.jahia.se.modules.exactlyImageGenerator.services;
 
+import org.jahia.se.modules.exactlyImageGenerator.cfg.ExactlyConfiguration;
 import org.jahia.se.modules.exactlyImageGenerator.proxy.ExactlyProxyClient;
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -27,13 +28,23 @@ public class ExactlyService {
     @Reference
     private DamService damService;
     
+    @Reference
+    private ExactlyConfiguration configuration;
+    
+    /**
+     * Build API endpoint path using configured path and version
+     */
+    private String buildEndpoint(String resource) {
+        return "/" + configuration.getApiPath() + "/" + configuration.getApiVersion() + resource;
+    }
+    
     /**
      * List all models from Exactly API
      * GET /public/v1/models
      */
     public List<Map<String, Object>> listStyles() throws Exception {
         logger.info("Fetching models from Exactly API");
-        String response = proxyClient.get("/public/v1/models");
+        String response = proxyClient.get(buildEndpoint("/models"));
         
         JSONObject json = new JSONObject(response);
         JSONArray styles = json.optJSONArray("items");
@@ -76,7 +87,7 @@ public class ExactlyService {
         }
         payload.put("custom_data", customData);
         
-        String response = proxyClient.post("/public/v1/models", payload.toString());
+        String response = proxyClient.post(buildEndpoint("/models"), payload.toString());
         JSONObject json = new JSONObject(response);
         
         String uid = json.optString("uid");
@@ -106,7 +117,7 @@ public class ExactlyService {
      */
     public void deleteStyle(String styleId) throws Exception {
         logger.info("Deleting model: {}", styleId);
-        proxyClient.delete("/public/v1/models/" + styleId + "/");
+        proxyClient.delete(buildEndpoint("/models/" + styleId + "/"));
         logger.info("Successfully deleted model: {}", styleId);
     }
     
@@ -118,7 +129,7 @@ public class ExactlyService {
     public Map<String, Object> uploadTrainingImages(String styleId, List<String> damAssetUuids) throws Exception {
         logger.info("Uploading {} training images for model: {}", damAssetUuids.size(), styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/train_images/";
+        String endpoint = buildEndpoint("/models/" + styleId + "/train_images/");
         int successCount = 0;
         int failureCount = 0;
         StringBuilder errorMessages = new StringBuilder();
@@ -164,7 +175,7 @@ public class ExactlyService {
     public List<Map<String, Object>> getTrainingImages(String styleId) throws Exception {
         logger.info("Fetching training images for model: {}", styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/train_images/";
+        String endpoint = buildEndpoint("/models/" + styleId + "/train_images/");;
         String response = proxyClient.get(endpoint);
         
         logger.info("Training images API raw response (first 200 chars): {}", 
@@ -243,7 +254,7 @@ public class ExactlyService {
     public void deleteTrainingImage(String styleId, String imageUid) throws Exception {
         logger.info("Deleting training image {} from model: {}", imageUid, styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/train_images/" + imageUid + "/";
+        String endpoint = buildEndpoint("/models/" + styleId + "/train_images/" + imageUid + "/");
         proxyClient.delete(endpoint);
         
         logger.info("Successfully deleted training image: {}", imageUid);
@@ -256,7 +267,7 @@ public class ExactlyService {
     public Map<String, Object> trainStyle(String styleId) throws Exception {
         logger.info("Starting training for model: {}", styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/train";
+        String endpoint = buildEndpoint("/models/" + styleId + "/train");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -275,7 +286,7 @@ public class ExactlyService {
     public Map<String, Object> getStyleStatus(String styleId) throws Exception {
         logger.info("Checking status for model: {}", styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/train/progress";
+        String endpoint = buildEndpoint("/models/" + styleId + "/train/progress");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -302,7 +313,7 @@ public class ExactlyService {
     public Map<String, Object> putModelToDraft(String styleId) throws Exception {
         logger.info("Putting model to draft: {}", styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/draft/";
+        String endpoint = buildEndpoint("/models/" + styleId + "/draft/");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -320,7 +331,7 @@ public class ExactlyService {
     public Map<String, Object> cancelTraining(String styleId) throws Exception {
         logger.info("Canceling training for model: {}", styleId);
         
-        String endpoint = "/public/v1/models/" + styleId + "/cancel/";
+        String endpoint = buildEndpoint("/models/" + styleId + "/cancel/");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -350,7 +361,7 @@ public class ExactlyService {
             }
         }
         
-        String response = proxyClient.post("/public/v1/images", payload.toString());
+        String response = proxyClient.post(buildEndpoint("/images"), payload.toString());
         JSONObject json = new JSONObject(response);
         
         List<String> urls = new ArrayList<>();
@@ -382,7 +393,7 @@ public class ExactlyService {
     public Map<String, Object> getModel(String modelUid) throws Exception {
         logger.info("Fetching model: {}", modelUid);
         
-        String endpoint = "/public/v1/models/" + modelUid;
+        String endpoint = buildEndpoint("/models/" + modelUid);;
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -402,7 +413,7 @@ public class ExactlyService {
     public void deleteModel(String modelUid) throws Exception {
         logger.info("Deleting model: {}", modelUid);
         
-        String endpoint = "/public/v1/models/" + modelUid;
+        String endpoint = buildEndpoint("/models/" + modelUid);
         proxyClient.delete(endpoint);
     }
     
@@ -413,7 +424,7 @@ public class ExactlyService {
     public Map<String, Object> putModelIntoDraft(String modelUid) throws Exception {
         logger.info("Putting model into draft: {}", modelUid);
         
-        String endpoint = "/public/v1/models/" + modelUid + "/draft";
+        String endpoint = buildEndpoint("/models/" + modelUid + "/draft");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -431,7 +442,7 @@ public class ExactlyService {
     public List<Map<String, Object>> listTrainingImages(String modelUid) throws Exception {
         logger.info("Listing training images for model: {}", modelUid);
         
-        String endpoint = "/public/v1/models/" + modelUid + "/train_images";
+        String endpoint = buildEndpoint("/models/" + modelUid + "/train_images");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -469,7 +480,7 @@ public class ExactlyService {
     public Map<String, Object> getGenerationStatus(String jobId) throws Exception {
         logger.info("Checking generation status for job: {}", jobId);
         
-        String endpoint = "/public/v1/images/" + jobId;
+        String endpoint = buildEndpoint("/images/" + jobId);
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -504,7 +515,7 @@ public class ExactlyService {
         JSONObject payload = new JSONObject();
         payload.put("scale", scale);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/upscales";
+        String endpoint = buildEndpoint("/images/" + imageUid + "/upscales");
         String response = proxyClient.post(endpoint, payload.toString());
         
         JSONObject json = new JSONObject(response);
@@ -523,7 +534,7 @@ public class ExactlyService {
     public Map<String, Object> getUpscaledImage(String imageUid, int scale) throws Exception {
         logger.info("Getting upscaled image {} with scale: {}", imageUid, scale);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/upscales/" + scale;
+        String endpoint = buildEndpoint("/images/" + imageUid + "/upscales/" + scale);
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -542,7 +553,7 @@ public class ExactlyService {
     public Map<String, Object> vectorizeImage(String imageUid) throws Exception {
         logger.info("Vectorizing image: {}", imageUid);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/vectors";
+        String endpoint = buildEndpoint("/images/" + imageUid + "/vectors");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -561,7 +572,7 @@ public class ExactlyService {
     public Map<String, Object> getVectorizedImage(String imageUid) throws Exception {
         logger.info("Getting vectorized image: {}", imageUid);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/vectors";
+        String endpoint = buildEndpoint("/images/" + imageUid + "/vectors");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -580,7 +591,7 @@ public class ExactlyService {
     public Map<String, Object> removeBackground(String imageUid) throws Exception {
         logger.info("Removing background from image: {}", imageUid);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/remove-bg";
+        String endpoint = buildEndpoint("/images/" + imageUid + "/remove-bg");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -599,7 +610,7 @@ public class ExactlyService {
     public Map<String, Object> getBackgroundRemovedImage(String imageUid) throws Exception {
         logger.info("Getting background-removed image: {}", imageUid);
         
-        String endpoint = "/public/v1/images/" + imageUid + "/remove-bg";
+        String endpoint = buildEndpoint("/images/" + imageUid + "/remove-bg");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);

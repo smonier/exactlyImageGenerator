@@ -135,9 +135,17 @@ exactly.api.token=YOUR_API_TOKEN_HERE
 
 # API Base URL (optional, defaults to https://api.exactly.ai)
 exactly.api.baseUrl=https://api.exactly.ai
+
+# API Path (optional, defaults to public)
+exactly.api.path=public
+
+# API Version (optional, defaults to v1)
+exactly.api.version=v1
 ```
 
 **Important**: Never commit the `.cfg` file with real tokens to version control.
+
+**Note**: The path and version settings allow you to adapt to future Exactly.ai API changes without modifying code. Endpoints are constructed as: `{baseUrl}/{path}/{version}/{resource}`
 
 ### Configuration Management
 
