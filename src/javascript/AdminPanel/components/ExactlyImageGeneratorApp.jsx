@@ -145,12 +145,26 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                         ]}
                         onStepClick={step => {
                             // Allow navigation to any accessible step
-                            // Can go back to any previous step, or forward if current step allows progression
-                            if (step <= currentStep || (step === currentStep + 1 && canProgress())) {
+                            // Can go back to any previous step
+                            if (step <= currentStep) {
+                                setCurrentStep(step);
+                                return;
+                            }
+                            
+                            // Forward navigation logic
+                            // If on Style step and model is ready, allow jumping directly to Generate
+                            if (currentStep === STEPS.STYLE && step === STEPS.GENERATE && selectedStyleStatus === 'ready') {
+                                setCurrentStep(step);
+                                return;
+                            }
+                            
+                            // Otherwise, can only move to next step if canProgress allows it
+                            if (step === currentStep + 1 && canProgress()) {
                                 setCurrentStep(step);
                             }
                         }}
                         canProgress={canProgress()}
+                        selectedStyleStatus={selectedStyleStatus}
                     />
 
                     {/* Step Content */}

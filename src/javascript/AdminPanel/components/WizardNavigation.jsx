@@ -13,7 +13,7 @@ const stepIcons = {
     2: () => <span>☁️</span>
 };
 
-const WizardNavigation = ({currentStep, steps, onStepClick, canProgress}) => {
+const WizardNavigation = ({currentStep, steps, onStepClick, canProgress, selectedStyleStatus}) => {
     return (
         <div className="wizard-nav">
             {steps.map((step, index) => {
@@ -21,7 +21,11 @@ const WizardNavigation = ({currentStep, steps, onStepClick, canProgress}) => {
                 const isActive = currentStep === step.id;
                 const isCompleted = currentStep > step.id;
                 const isNextStep = step.id === currentStep + 1;
-                const isClickable = step.id <= currentStep || (isNextStep && canProgress);
+                
+                // Special case: Allow jumping to Generate (step 2) from Style (step 0) if model is ready
+                const canJumpToGenerate = currentStep === 0 && step.id === 2 && selectedStyleStatus === 'ready';
+                
+                const isClickable = step.id <= currentStep || (isNextStep && canProgress) || canJumpToGenerate;
                 
                 return (
                     <div
