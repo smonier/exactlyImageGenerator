@@ -29,6 +29,8 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
     const [targetFolder, setTargetFolder] = useState('/sites/systemsite/files/exactly-generated');
     const [selectedFolder, setSelectedFolder] = useState(null);
     const [savedAssets, setSavedAssets] = useState([]);
+    const [useReferenceImages, setUseReferenceImages] = useState(false);
+    const [referenceImages, setReferenceImages] = useState([]);
     
     // Convert aspect ratio to pixel dimensions
     const aspectRatioToSize = (ratio) => {
@@ -101,6 +103,15 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
             size: size
         };
 
+        // Add reference images if enabled
+        if (useReferenceImages && referenceImages.length > 0) {
+            params.reference_images = referenceImages.map(ref => ({
+                base64: ref.base64,
+                purpose: ref.purpose,
+                ...(ref.purpose === 'sketch' && ref.strength !== undefined ? {strength: ref.strength} : {})
+            }));
+        }
+
         generateImages({
             variables: {
                 styleUuid: styleUuid,
@@ -155,6 +166,122 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
                 selectionJson: JSON.stringify(selection)
             }
         });
+    };
+
+    const handleAddReferenceImage = () => {
+        window.CE_API.openPicker({
+            type: 'image',
+            site: window.jahiaGWTParameters?.siteKey || 'digitall',
+            lang: window.jahiaGWTParameters?.uilang || 'en',
+            isMultiple: false,
+            setValue: async (selectedItems) => {
+                if (selectedItems && selectedItems.length > 0) {
+                    const asset = selectedItems[0];
+                    console.log('Selected asset:', asset);
+                    try {
+                        // Construct URL for default workspace to access unpublished content
+                        // Replace /sites/ with /files/default/ or use the path property
+                        let imageUrl = asset.url || asset.path || asset.downloadUrl;
+                        
+                        // If URL contains /sites/, replace with /files/default/ to access unpublished content
+                        if (imageUrl.includes('/sites/')) {
+                            imageUrl = imageUrl.replace('/sites/', '/files/default/sites/');
+                        }
+                        
+                        console.log('Fetching image from:', imageUrl);
+                        
+                        // Fetch the image with credentials to handle authentication
+                        const response = await fetch(imageUrl, {
+                            credentials: 'include',
+                            headers: {
+                                'Accept': 'image/*'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const contentType = response.headers.get('content-type');
+                        console.log('Response content-type:', contentType);
+                        
+                        // Check if we actually got an image
+                        if (contentType && !contentType.startsWith('image/')) {
+                            throw new Error(`Expected image but got ${contentType}`);
+                        }
+                        
+                        const blob = await response.blob();
+                        
+                        // Check file size limit (2.5 MB)
+                        const maxSizeBytes = 2.5 * 1024 * 1024; // 2.5 MB
+                        if (blob.size > maxSizeBytes) {
+                            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                            throw new Error(`Image size (${sizeMB} MB) exceeds the maximum allowed size of 2.5 MB. Please select a smaller image.`);
+                        }
+                        
+                        // Determine the image mime type from the file extension or content-type
+                        let mimeType = contentType || 'image/png';
+                        if (!mimeType.startsWith('image/')) {
+                            const fileName = asset.name || asset.displayName || '';
+                            if (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
+                                mimeType = 'image/jpeg';
+                            } else if (fileName.toLowerCase().endsWith('.png')) {
+                                mimeType = 'image/png';
+                            } else if (fileName.toLowerCase().endsWith('.gif')) {
+                                mimeType = 'image/gif';
+                            } else if (fileName.toLowerCase().endsWith('.webp')) {
+                                mimeType = 'image/webp';
+                            } else {
+                                mimeType = 'image/png'; // default
+                            }
+                        }
+                        
+                        // Create a new blob with the correct mime type
+                        const imageBlob = new Blob([blob], { type: mimeType });
+                        
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            // reader.result is the full data URL: "data:image/png;base64,iVBORw0KGgo..."
+                            const dataUrl = reader.result;
+                            console.log('Data URL mime type:', dataUrl.substring(0, 30));
+                            
+                            // Extract just the base64 part (after the comma) for API
+                            const base64Only = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+                            
+                            setReferenceImages(prev => [...prev, {
+                                uuid: asset.uuid,
+                                name: asset.name || asset.displayName,
+                                url: asset.url,
+                                previewUrl: dataUrl,    // For display: full data URL
+                                base64: base64Only,     // For API: only base64 string
+                                purpose: 'reference',
+                                strength: 0.5
+                            }]);
+                        };
+                        reader.readAsDataURL(imageBlob);
+                    } catch (error) {
+                        console.error('Failed to load reference image:', error);
+                        onError('Failed to load reference image: ' + error.message);
+                    }
+                }
+            }
+        });
+    };
+
+    const handleRemoveReferenceImage = (index) => {
+        setReferenceImages(prev => prev.filter((_, idx) => idx !== index));
+    };
+
+    const handleUpdateReferenceImagePurpose = (index, purpose) => {
+        setReferenceImages(prev => prev.map((ref, idx) => 
+            idx === index ? {...ref, purpose} : ref
+        ));
+    };
+
+    const handleUpdateReferenceImageStrength = (index, strength) => {
+        setReferenceImages(prev => prev.map((ref, idx) => 
+            idx === index ? {...ref, strength: parseFloat(strength)} : ref
+        ));
     };
 
     return (
@@ -218,6 +345,113 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
                         </select>
                     </div>
                 </div>
+            </div>
+
+            {/* Reference Images Section */}
+            <div className="generate-step__section">
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                    <Checkbox
+                        checked={useReferenceImages}
+                        onChange={() => setUseReferenceImages(!useReferenceImages)}
+                    />
+                    <Typography variant="subheading">{t('generate.useReferenceImages')}</Typography>
+                </div>
+                <Typography variant="caption">{t('generate.referenceImagesNote')}</Typography>
+
+                {useReferenceImages && (
+                    <div className="generate-step__reference-images" style={{marginTop: '16px'}}>
+                        {referenceImages.map((ref, index) => (
+                            <div key={index} className="generate-step__reference-image" style={{
+                                border: '1px solid #ddd',
+                                padding: '12px',
+                                marginBottom: '12px',
+                                borderRadius: '4px'
+                            }}>
+                                <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px'}}>
+                                    <Typography variant="body">
+                                        {t('generate.referenceImage', {index: index + 1})}
+                                    </Typography>
+                                    <Button
+                                        label={t('generate.removeReferenceImage')}
+                                        size="compact"
+                                        variant="ghost"
+                                        onClick={() => handleRemoveReferenceImage(index)}
+                                    />
+                                </div>
+                                
+                                <div style={{marginBottom: '8px'}}>
+                                    <Typography variant="caption">{ref.name}</Typography>
+                                    {(ref.previewUrl || ref.url) && (
+                                        <img
+                                            src={ref.previewUrl || ref.url}
+                                            alt={ref.name}
+                                            style={{
+                                                maxWidth: '200px',
+                                                maxHeight: '200px',
+                                                marginTop: '8px',
+                                                borderRadius: '4px',
+                                                display: 'block'
+                                            }}
+                                            onError={(e) => {
+                                                console.error('Failed to load image preview');
+                                                e.target.style.display = 'none';
+                                            }}
+                                        />
+                                    )}
+                                </div>
+
+                                <div className="generate-step__option" style={{marginBottom: '8px'}}>
+                                    <Typography variant="body">{t('generate.referenceImagePurpose')}</Typography>
+                                    <select
+                                        className="generate-step__select"
+                                        value={ref.purpose}
+                                        disabled={generating}
+                                        onChange={e => handleUpdateReferenceImagePurpose(index, e.target.value)}
+                                        style={{marginTop: '4px'}}
+                                    >
+                                        <option value="sketch">{t('generate.purposeSketch')}</option>
+                                        <option value="style">{t('generate.purposeStyle')}</option>
+                                        <option value="reference">{t('generate.purposeReference')}</option>
+                                        <option value="instruct">{t('generate.purposeInstruct')}</option>
+                                        <option value="product">{t('generate.purposeProduct')}</option>
+                                        <option value="character">{t('generate.purposeCharacter')}</option>
+                                    </select>
+                                </div>
+
+                                {ref.purpose === 'sketch' && (
+                                    <div className="generate-step__option">
+                                        <Typography variant="body">{t('generate.strengthLabel')}</Typography>
+                                        <Typography variant="caption">{t('generate.strengthNote')}</Typography>
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            max="1"
+                                            step="0.1"
+                                            value={ref.strength}
+                                            disabled={generating}
+                                            onChange={e => handleUpdateReferenceImageStrength(index, e.target.value)}
+                                            style={{
+                                                marginTop: '4px',
+                                                padding: '8px',
+                                                border: '1px solid #ddd',
+                                                borderRadius: '4px',
+                                                width: '100px'
+                                            }}
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+
+                        <Button
+                            label={t('generate.addReferenceImage')}
+                            size="default"
+                            variant="outlined"
+                            disabled={generating}
+                            onClick={handleAddReferenceImage}
+                        />
+                    </div>
+                )}
             </div>
 
             {/* Generate Button */}

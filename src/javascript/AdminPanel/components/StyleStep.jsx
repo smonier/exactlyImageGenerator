@@ -10,6 +10,7 @@ import React, {useState, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation, useQuery} from '@apollo/client';
 import {Button, Typography, Loader, Input} from '@jahia/moonstone';
+import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {SYNC_EXACTLY_STYLES, CREATE_EXACTLY_STYLE, DELETE_EXACTLY_STYLE, GET_STYLES, GET_TRAINING_PROGRESS} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
 import './StyleStep.css';
@@ -25,6 +26,8 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
     const [showCreateForm, setShowCreateForm] = useState(false);
     const [newStyleName, setNewStyleName] = useState('');
     const [newStyleDescription, setNewStyleDescription] = useState('');
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [styleToDelete, setStyleToDelete] = useState(null);
     const [trainingProgress, setTrainingProgress] = useState({}); // Track progress per style UUID
 
     // Build the path for the current site
@@ -123,13 +126,20 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
     };
 
     const handleDelete = (styleUuid, styleName) => {
-        if (window.confirm(t('style.confirmDelete', {name: styleName}))) {
+        setStyleToDelete({uuid: styleUuid, name: styleName});
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (styleToDelete) {
             deleteStyle({
                 variables: {
-                    styleUuid: styleUuid
+                    styleUuid: styleToDelete.uuid
                 }
             });
         }
+        setDeleteDialogOpen(false);
+        setStyleToDelete(null);
     };
 
     useEffect(() => {
@@ -186,6 +196,31 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
 
     return (
         <div className="style-step">
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>{t('actions.delete')}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {styleToDelete && t('style.confirmDelete', {name: styleToDelete.name})}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        label={t('actions.cancel')}
+                        variant="ghost"
+                        onClick={() => setDeleteDialogOpen(false)}
+                    />
+                    <Button
+                        label={t('actions.delete')}
+                        color="danger"
+                        onClick={confirmDelete}
+                    />
+                </DialogActions>
+            </Dialog>
+
             <div className="style-step__header">
                 <Typography variant="title">{t('style.title')}</Typography>
                 <Typography variant="body">{t('style.description')}</Typography>

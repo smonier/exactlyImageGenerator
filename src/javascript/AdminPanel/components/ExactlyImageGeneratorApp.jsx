@@ -11,6 +11,7 @@
 import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Typography, Button} from '@jahia/moonstone';
+import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {createApolloClient} from '../../graphql/apolloClient';
 import StyleStep from './StyleStep';
 import TrainStep from './TrainStep';
@@ -36,6 +37,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
     // Wizard state
     const [currentStep, setCurrentStep] = useState(STEPS.STYLE);
     const [globalError, setGlobalError] = useState(null);
+    const [showResetDialog, setShowResetDialog] = useState(false);
 
     // Shared state across steps
     const [selectedStyleUuid, setSelectedStyleUuid] = useState(null);
@@ -68,15 +70,17 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
     };
 
     const handleReset = () => {
-        // eslint-disable-next-line no-alert
-        if (window.confirm(t('app.confirmReset'))) {
-            setCurrentStep(STEPS.STYLE);
-            setSelectedStyleUuid(null);
-            setSelectedStyleName('');
-            setSelectedStyleStatus('unknown');
-            setGeneratedUrls([]);
-            setGlobalError(null);
-        }
+        setShowResetDialog(true);
+    };
+
+    const confirmReset = () => {
+        setCurrentStep(STEPS.STYLE);
+        setSelectedStyleUuid(null);
+        setSelectedStyleName('');
+        setSelectedStyleStatus('unknown');
+        setGeneratedUrls([]);
+        setGlobalError(null);
+        setShowResetDialog(false);
     };
 
     // Render header with current state
@@ -96,6 +100,29 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
 
     return (
             <div className="exactly-app">
+                {/* Confirmation Dialogs */}
+                <Dialog
+                    open={showResetDialog}
+                    onClose={() => setShowResetDialog(false)}
+                >
+                    <DialogTitle>{t('actions.reset')}</DialogTitle>
+                    <DialogContent>
+                        <DialogContentText>{t('app.confirmReset')}</DialogContentText>
+                    </DialogContent>
+                    <DialogActions>
+                        <Button
+                            label={t('actions.cancel')}
+                            variant="ghost"
+                            onClick={() => setShowResetDialog(false)}
+                        />
+                        <Button
+                            label={t('actions.reset')}
+                            color="danger"
+                            onClick={confirmReset}
+                        />
+                    </DialogActions>
+                </Dialog>
+
                 <div className="exactly-app__body">
                     {/* Global Error Banner */}
                     {globalError && (

@@ -15,7 +15,8 @@
     "cancel": "Annuler",
     "save": "Enregistrer",
     "close": "Fermer",
-    "create": "Créer"
+    "create": "Créer",
+    "delete": "Supprimer"
   },
   
   "steps": {
@@ -44,12 +45,12 @@
   
   "train": {
     "title": "Entraîner le modèle IA",
-    "description": "Téléchargez des images d'entraînement depuis le DAM Jahia pour personnaliser votre modèle IA",
+    "description": "Téléchargez des images d'entraînement depuis le Jahia Media Manager Jahia pour personnaliser votre modèle IA",
     "targetStyle": "Style d'entraînement",
     "selectAssets": "Sélectionner les images d'entraînement",    "loadingExisting": "Chargement des images d'entraînement existantes...",
-    "existingImages": "{{count}} images déjà téléversées sur Exactly.ai",    "openMediaPicker": "Sélectionner des images depuis le DAM",
-    "damPickerNote": "Point d'intégration : Ceci devrait utiliser le composant sélecteur DAM de Jahia. Pour l'instant, saisissez les UUID des ressources manuellement.",
-    "assetUuidPlaceholder": "Entrez l'UUID de la ressource DAM et appuyez sur Entrée",
+    "existingImages": "{{count}} images déjà téléversées sur Exactly.ai",    "openMediaPicker": "Sélectionner des images depuis le Jahia Media Manager",
+    "Jahia Media ManagerPickerNote": "Point d'intégration : Ceci devrait utiliser le composant sélecteur Jahia Media Manager de Jahia. Pour l'instant, saisissez les UUID des ressources manuellement.",
+    "assetUuidPlaceholder": "Entrez l'UUID de la ressource Jahia Media Manager et appuyez sur Entrée",
     "addAsset": "Ajouter une ressource",
     "selectedAssets": "{{count}} ressources sélectionnées",
     "uploadButton": "Télécharger les images vers Exactly.ai",
@@ -82,18 +83,33 @@
     "hideAdvanced": "Masquer les options avancées",
     "paramsNote": "Entrez les paramètres JSON (facultatif)",
     "paramsPlaceholder": "{\"num_images\": 4, \"quality\": \"high\"}",
+    "useReferenceImages": "Utiliser des images de référence",
+    "referenceImagesNote": "Ajoutez des images de référence pour guider la génération",
+    "addReferenceImage": "Ajouter une image de référence",
+    "selectReferenceImage": "Sélectionner une image depuis Jahia Media Manager",
+    "referenceImagePurpose": "Objectif",
+    "purposeSketch": "Esquisse - Utiliser la structure de l'image comme guide",
+    "purposeStyle": "Style - Transférer le style artistique",
+    "purposeReference": "Référence - Référence visuelle générale",
+    "purposeInstruct": "Instruction - Modifier selon le prompt",
+    "purposeProduct": "Produit - Positionner un produit",
+    "purposeCharacter": "Personnage - Positionner un personnage",
+    "strengthLabel": "Force",
+    "strengthNote": "Influence de la structure sur la génération (0.0 - 1.0)",
+    "removeReferenceImage": "Supprimer",
+    "referenceImage": "Image de référence {{index}}",
     "generateButton": "Générer des images",
     "generating": "Génération...",
     "resultsTitle": "{{count}} images générées",
     "previewUnavailable": "Aperçu non disponible (CORS)",
     "openExternal": "Ouvrir dans un nouvel onglet",
-    "saveTitle": "Enregistrer dans le DAM",
-    "saveNote": "Sélectionnez les images à enregistrer et choisissez un dossier cible dans Jahia DAM",
+    "saveTitle": "Enregistrer dans le Jahia Media Manager",
+    "saveNote": "Sélectionnez les images à enregistrer et choisissez un dossier cible dans le Jahia Media Manager",
     "targetFolder": "Chemin du dossier cible",
     "selectFolder": "Sélectionner un dossier",
-    "saveButton": "Enregistrer {{count}} images dans le DAM",
+    "saveButton": "Enregistrer {{count}} images dans le Jahia Media Manager",
     "saving": "Enregistrement...",
-    "savedTitle": "✓ {{count}} ressources enregistrées dans le DAM"
+    "savedTitle": "✓ {{count}} ressources enregistrées dans le Jahia Media Manager"
   },
   
   "errors": {
@@ -107,7 +123,7 @@
     "generationFailed": "Échec de la génération des images : {{message}}",
     "noPrompt": "Veuillez entrer un prompt",
     "invalidJson": "JSON invalide dans le champ des paramètres",
-    "saveFailed": "Échec de l'enregistrement des images dans le DAM : {{message}}",
+    "saveFailed": "Échec de l'enregistrement des images dans le Jahia Media Manager : {{message}}",
     "noSelection": "Veuillez sélectionner au moins une image à enregistrer"
   }
 }

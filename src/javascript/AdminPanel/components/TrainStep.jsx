@@ -10,6 +10,7 @@ import React, {useState, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
 import {Button, Typography, Input, Loader} from '@jahia/moonstone';
+import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {TRAIN_EXACTLY_STYLE, UPLOAD_TRAINING_IMAGES, GET_TRAINING_IMAGES, DELETE_TRAINING_IMAGE, GET_TRAINING_PROGRESS, PUT_MODEL_TO_DRAFT, CANCEL_TRAINING} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
 import CircularProgress from './CircularProgress';
@@ -29,6 +30,8 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
     const [trainingStatus, setTrainingStatus] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [existingImages, setExistingImages] = useState([]); // Images already uploaded to Exactly.ai
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [imageToDelete, setImageToDelete] = useState(null);
     
     const siteKey = getSiteKey();
     
@@ -256,15 +259,22 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
         }
     });
 
-    const handleDeleteImage = (imageId) => {
-        if (window.confirm(t('train.confirmDelete'))) {
-            deleteImage({
+    const handleDeleteImage = (imageUid) => {
+        setImageToDelete(imageUid);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDeleteImage = () => {
+        if (imageToDelete) {
+            deleteTrainingImage({
                 variables: {
                     styleUuid: styleUuid,
-                    imageUid: imageId
+                    imageUid: imageToDelete
                 }
             });
         }
+        setDeleteDialogOpen(false);
+        setImageToDelete(null);
     };
 
     const handleOpenMediaPicker = () => {
@@ -427,6 +437,31 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
 
     return (
         <div className="train-step">
+            {/* Delete Confirmation Dialog */}
+            <Dialog
+                open={deleteDialogOpen}
+                onClose={() => setDeleteDialogOpen(false)}
+            >
+                <DialogTitle>{t('actions.delete')}</DialogTitle>
+                <DialogContent>
+                    <DialogContentText>
+                        {t('train.confirmDelete')}
+                    </DialogContentText>
+                </DialogContent>
+                <DialogActions>
+                    <Button
+                        label={t('actions.cancel')}
+                        variant="ghost"
+                        onClick={() => setDeleteDialogOpen(false)}
+                    />
+                    <Button
+                        label={t('actions.delete')}
+                        color="danger"
+                        onClick={confirmDeleteImage}
+                    />
+                </DialogActions>
+            </Dialog>
+
             <div className="train-step__header">
                 <Typography variant="title">{t('train.title')}</Typography>
                 <Typography variant="body">{t('train.description')}</Typography>
