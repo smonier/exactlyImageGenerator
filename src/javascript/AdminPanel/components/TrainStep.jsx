@@ -12,7 +12,7 @@ import {useMutation} from '@apollo/client';
 import {Button, Typography, Input, Loader} from '@jahia/moonstone';
 import {CloudUpload} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
-import {TRAIN_EXACTLY_STYLE, UPLOAD_TRAINING_IMAGES, GET_TRAINING_IMAGES, DELETE_TRAINING_IMAGE, GET_TRAINING_PROGRESS, PUT_MODEL_TO_DRAFT, CANCEL_TRAINING} from '../../graphql/operations';
+import {TRAIN_EXACTLY_STYLE, UPLOAD_TRAINING_IMAGES, GET_TRAINING_IMAGES, DELETE_TRAINING_IMAGE, GET_MODEL, GET_TRAINING_PROGRESS, PUT_MODEL_TO_DRAFT, CANCEL_TRAINING} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
 import CircularProgress from './CircularProgress';
 import './TrainStep.css';
@@ -22,7 +22,7 @@ const getSiteKey = () => {
     return window.contextJsParameters?.siteKey || 'systemsite';
 };
 
-const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}) => {
+const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrainingStart, onError}) => {
     const {t} = useTranslation('exactlyImageGenerator');
     const [damAssetInput, setDamAssetInput] = useState('');
     const [damAssets, setDamAssets] = useState([]);
@@ -57,53 +57,147 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
         }
     });
     
-    // Initialize training status from styleStatus prop
-    useEffect(() => {
-        if (styleStatus) {
-            setTrainingStatus({
-                status: styleStatus,
-                progress: styleStatus === 'training' ? 0 : (styleStatus === 'ready' ? 100 : 0)
-            });
-        }
-    }, [styleStatus]);
+    // Get model details mutation
+    const [getModel] = useMutation(GET_MODEL);
     
-    // Fetch images and check training progress on mount
-    useEffect(() => {
-        if (styleUuid) {
-            // Always fetch existing training images regardless of status
-            fetchImages({
+    // Get training progress mutation
+    const [getProgress] = useMutation(GET_TRAINING_PROGRESS, {
+        onCompleted: data => {
+            if (data?.exactly?.getTrainingProgress?.successful) {
+                try {
+                    const progress = JSON.parse(data.exactly.getTrainingProgress.message);
+                    setTrainingStatus(prev => ({
+                        ...(prev || {}),
+                        status: progress.status || (prev?.status) || 'training',
+                        progress: progress.progress !== undefined ? progress.progress : (prev?.progress || 0),
+                        message: progress.progress === 100 ? 'Training complete' : 'Training in progress'
+                    }));
+                    
+                    // If status changed to training, reload images
+                    if (progress.status === 'training') {
+                        fetchImages({
+                            variables: {
+                                styleUuid: styleUuid
+                            }
+                        });
+                    }
+                    
+                    // Stop polling when progress reaches 100% or if failed
+                    if (progress.progress >= 100 || progress.status === 'completed' || progress.status === 'failed') {
+                        stopProgressPolling();
+                        // Reload images when training completes
+                        fetchImages({
+                            variables: {
+                                styleUuid: styleUuid
+                            }
+                        });
+                    }
+                } catch (e) {
+                    console.error('Failed to parse progress:', e);
+                }
+            }
+        }
+    });
+
+    const progressIntervalRef = React.useRef(null);
+
+    const startProgressPolling = () => {
+        // Poll every 5 seconds
+        progressIntervalRef.current = setInterval(() => {
+            getProgress({
                 variables: {
                     styleUuid: styleUuid
                 }
             });
-            
-            // Only check progress if status is 'training'
-            if (styleStatus === 'training') {
-                getProgress({
+        }, 5000);
+    };
+
+    const stopProgressPolling = () => {
+        if (progressIntervalRef.current) {
+            clearInterval(progressIntervalRef.current);
+            progressIntervalRef.current = null;
+        }
+    };
+
+    // Cleanup on unmount
+    useEffect(() => {
+        return () => stopProgressPolling();
+    }, []);
+    
+    // Fetch model details, then progress if training, then images
+    useEffect(() => {
+        if (styleUuid) {
+            // Step 1: Fetch model details from /public/v1/models/{uid}/
+            getModel({
+                variables: {
+                    styleUuid: styleUuid
+                }
+            }).then(modelResult => {
+                if (modelResult?.data?.exactly?.getModel?.successful) {
+                    try {
+                        const model = JSON.parse(modelResult.data.exactly.getModel.message);
+                        const modelStatus = model.status;
+                        
+                        // Step 2: If training, get progress from /public/v1/models/{uid}/train/progress/
+                        if (modelStatus === 'training') {
+                            return getProgress({
+                                variables: {
+                                    styleUuid: styleUuid
+                                }
+                            }).then(progressResult => {
+                                if (progressResult?.data?.exactly?.getTrainingProgress?.successful) {
+                                    try {
+                                        const progress = JSON.parse(progressResult.data.exactly.getTrainingProgress.message);
+                                        setTrainingStatus({
+                                            status: progress.status || modelStatus,
+                                            progress: progress.progress || 0,
+                                            message: 'Training in progress'
+                                        });
+                                        // Start polling if training and not complete
+                                        if (progress.progress < 100) {
+                                            startProgressPolling();
+                                        }
+                                    } catch (e) {
+                                        console.error('Failed to parse progress:', e);
+                                        setTrainingStatus({
+                                            status: modelStatus,
+                                            progress: 0,
+                                            message: 'Training in progress'
+                                        });
+                                    }
+                                }
+                                return Promise.resolve();
+                            });
+                        } else {
+                            // Not training, just set status from model
+                            setTrainingStatus({
+                                status: modelStatus,
+                                progress: modelStatus === 'ready' ? 100 : 0
+                            });
+                            return Promise.resolve();
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse model details:', e);
+                        return Promise.resolve();
+                    }
+                }
+                return Promise.resolve();
+            }).then(() => {
+                // Step 3: Finally fetch images from Exactly
+                fetchImages({
                     variables: {
                         styleUuid: styleUuid
                     }
-                }).then(result => {
-                    if (result?.data?.exactly?.getTrainingProgress?.successful) {
-                        try {
-                            const progress = JSON.parse(result.data.exactly.getTrainingProgress.message);
-                            setTrainingStatus({
-                                status: progress.status,
-                                progress: progress.progress,
-                                message: 'Training in progress'
-                            });
-                            // Start polling if training and not complete
-                            if (progress.progress < 100) {
-                                startProgressPolling();
-                            }
-                        } catch (e) {
-                            console.error('Failed to parse initial progress:', e);
-                        }
-                    }
-                }).catch(error => {
-                    console.error('Error checking initial training progress:', error);
                 });
-            }
+            }).catch(error => {
+                console.error('Error in initialization flow:', error);
+                // Still try to fetch images even if earlier steps fail
+                fetchImages({
+                    variables: {
+                        styleUuid: styleUuid
+                    }
+                });
+            });
         }
     }, [styleUuid, styleStatus]);
 
@@ -175,69 +269,6 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
             onError(errorMsg);
         }
     });
-
-    const [getProgress] = useMutation(GET_TRAINING_PROGRESS, {
-        onCompleted: data => {
-            if (data?.exactly?.getTrainingProgress?.successful) {
-                try {
-                    const progress = JSON.parse(data.exactly.getTrainingProgress.message);
-                    setTrainingStatus(prev => ({
-                        ...prev,
-                        status: progress.status || prev.status || 'training',
-                        progress: progress.progress !== undefined ? progress.progress : (prev.progress || 0),
-                        message: progress.progress === 100 ? 'Training complete' : 'Training in progress'
-                    }));
-                    
-                    // If status changed to training, reload images
-                    if (progress.status === 'training') {
-                        fetchImages({
-                            variables: {
-                                styleUuid: styleUuid
-                            }
-                        });
-                    }
-                    
-                    // Stop polling when progress reaches 100% or if failed
-                    if (progress.progress >= 100 || progress.status === 'completed' || progress.status === 'failed') {
-                        stopProgressPolling();
-                        // Reload images when training completes
-                        fetchImages({
-                            variables: {
-                                styleUuid: styleUuid
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error('Failed to parse progress:', e);
-                }
-            }
-        }
-    });
-
-    const progressIntervalRef = React.useRef(null);
-
-    const startProgressPolling = () => {
-        // Poll every 5 seconds
-        progressIntervalRef.current = setInterval(() => {
-            getProgress({
-                variables: {
-                    styleUuid: styleUuid
-                }
-            });
-        }, 5000);
-    };
-
-    const stopProgressPolling = () => {
-        if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-        }
-    };
-
-    // Cleanup on unmount
-    useEffect(() => {
-        return () => stopProgressPolling();
-    }, []);
 
     const [uploadImages] = useMutation(UPLOAD_TRAINING_IMAGES, {
         onCompleted: data => {
@@ -453,6 +484,13 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
 
     return (
         <div className="train-step">
+            {/* Status Badge - Top Right */}
+            {trainingStatus?.status && (
+                <div className="train-step__ready-badge">
+                    <StatusBadge status={trainingStatus.status} />
+                </div>
+            )}
+            
             {/* Delete Confirmation Dialog */}
             <Dialog
                 open={deleteDialogOpen}
@@ -481,9 +519,16 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
             <div className="train-step__header">
                 <Typography variant="title">{t('train.title')}</Typography>
                 <Typography variant="body">{t('train.description')}</Typography>
-                <Typography variant="body" className="train-step__style-info">
-                    {t('train.targetStyle')}: <strong>{styleName}</strong>
-                </Typography>
+                <div className="train-step__style-info">
+                    <Typography variant="body">
+                        {t('train.targetStyle')}: <strong>{styleName}</strong>
+                    </Typography>
+                    {styleDescription && (
+                        <Typography variant="body" className="train-step__style-description">
+                            {styleDescription}
+                        </Typography>
+                    )}
+                </div>
             </div>
 
             {/* DAM Asset Selection */}
@@ -605,7 +650,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
             </div>
 
             {/* Training Status - Show when training */}
-            {trainingStatus && (trainingStatus.status === 'training' || trainingStatus.jobId) && (
+            {trainingStatus && trainingStatus.status === 'training' && (
                 <div className="train-step__status">
                     <Typography variant="subheading">{t('train.statusTitle')}</Typography>
                     <div className="train-step__status-content">
@@ -614,9 +659,11 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
                                 {t('train.jobId')}: <code>{trainingStatus.jobId}</code>
                             </Typography>
                         )}
-                        <Typography variant="body">
-                            {t('train.status')}: <StatusBadge status={trainingStatus.status}/>
-                        </Typography>
+                        {trainingStatus.status && (
+                            <Typography variant="body">
+                                {t('train.status')}: <StatusBadge status={trainingStatus.status}/>
+                            </Typography>
+                        )}
                         
                         {/* Circular Progress Display */}
                         {trainingStatus.progress !== undefined && (
@@ -636,7 +683,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
                         )}
                         
                         {trainingStatus.message && (
-                            <Typography variant="body">
+                            <Typography variant="caption" className="train-step__status-message">
                                 {trainingStatus.message}
                             </Typography>
                         )}

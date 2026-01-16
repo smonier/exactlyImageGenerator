@@ -43,6 +43,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
     const [selectedStyleUuid, setSelectedStyleUuid] = useState(null);
     const [selectedStyleName, setSelectedStyleName] = useState('');
     const [selectedStyleStatus, setSelectedStyleStatus] = useState('unknown');
+    const [selectedStyleDescription, setSelectedStyleDescription] = useState('');
     const [generatedUrls, setGeneratedUrls] = useState([]);
 
     // Navigation handlers
@@ -51,7 +52,8 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
             case STEPS.STYLE:
                 return selectedStyleUuid !== null;
             case STEPS.TRAIN:
-                return true; // Training is optional
+                // Can only progress to Generate if model is not currently training
+                return selectedStyleStatus !== 'training';
             case STEPS.GENERATE:
                 return false; // Final step
             default:
@@ -78,6 +80,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
         setSelectedStyleUuid(null);
         setSelectedStyleName('');
         setSelectedStyleStatus('unknown');
+        setSelectedStyleDescription('');
         setGeneratedUrls([]);
         setGlobalError(null);
         setShowResetDialog(false);
@@ -141,11 +144,13 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                             {id: STEPS.GENERATE, label: t('steps.generate')}
                         ]}
                         onStepClick={step => {
-                            // Allow navigation to previous steps only
-                            if (step <= currentStep) {
+                            // Allow navigation to any accessible step
+                            // Can go back to any previous step, or forward if current step allows progression
+                            if (step <= currentStep || (step === currentStep + 1 && canProgress())) {
                                 setCurrentStep(step);
                             }
                         }}
+                        canProgress={canProgress()}
                     />
 
                     {/* Step Content */}
@@ -154,10 +159,11 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                         <StyleStep
                             selectedStyleUuid={selectedStyleUuid}
                             selectedStyleName={selectedStyleName}
-                            onStyleSelect={(uuid, name, status) => {
+                            onStyleSelect={(uuid, name, status, description) => {
                                 setSelectedStyleUuid(uuid);
                                 setSelectedStyleName(name);
                                 setSelectedStyleStatus(status || 'unknown');
+                                setSelectedStyleDescription(description || '');
                             }}
                             onError={setGlobalError}
                         />
@@ -168,6 +174,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                             styleUuid={selectedStyleUuid}
                             styleName={selectedStyleName}
                             styleStatus={selectedStyleStatus}
+                            styleDescription={selectedStyleDescription}
                             onTrainComplete={() => {/* Training complete */}}
                             onError={setGlobalError}
                         />

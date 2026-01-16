@@ -12,6 +12,7 @@
 [eximgynt:style] > jnt:content, jmix:editorialContent, mix:title
  - eximg:exactlyId (string) indexed=no
  - eximg:name (string)
+ - eximg:description (string, textarea) indexed=no
  - eximg:status (string) = 'unknown' autocreated indexed=no < 'unknown', 'draft', 'active', 'training', 'ready', 'failed'
  - eximg:active (boolean) = 'false' autocreated indexed=no
  - eximg:lastSynced (date)

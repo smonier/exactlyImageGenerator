@@ -98,3 +98,14 @@
 .wizard-nav__step--completed .wizard-nav__step__label {
     color: var(--color-success_dark);
 }
+
+.wizard-nav__step--disabled {
+    opacity: 0.5;
+    cursor: not-allowed !important;
+}
+
+.wizard-nav__step--disabled:hover {
+    border-color: var(--color-gray_light);
+    transform: none;
+    box-shadow: none;
+}

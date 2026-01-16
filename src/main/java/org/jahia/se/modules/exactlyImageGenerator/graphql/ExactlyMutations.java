@@ -84,8 +84,23 @@ public class ExactlyMutations {
                 String name = (String) model.get("name");
                 String status = (String) model.get("status");
                 Boolean active = (Boolean) model.get("active");
+                String metadata = (String) model.get("metadata");
                 
-                styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, active, null);
+                // Extract description from metadata
+                String description = null;
+                if (metadata != null) {
+                    try {
+                        org.json.JSONObject metadataJson = new org.json.JSONObject(metadata);
+                        org.json.JSONObject customData = metadataJson.optJSONObject("custom_data");
+                        if (customData != null) {
+                            description = customData.optString("description", null);
+                        }
+                    } catch (Exception e) {
+                        logger.warn("Failed to parse metadata for style {}", exactlyId, e);
+                    }
+                }
+                
+                styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, active, metadata, description);
             }
             
             return new ExactlySyncResponseImpl(true, "Synced " + models.size() + " styles");
@@ -119,9 +134,10 @@ public class ExactlyMutations {
             Map<String, Object> model = exactlyService.createStyle(name, description);
             String exactlyId = (String) model.get("uid");
             String status = (String) model.get("status");
+            String metadata = (String) model.get("metadata");
             
             // Create node in JCR
-            styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, true, null);
+            styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, true, metadata, description);
             
             return new ExactlySyncResponseImpl(true, exactlyId);
         } catch (Exception e) {
@@ -419,6 +435,40 @@ public class ExactlyMutations {
             
         } catch (Exception e) {
             logger.error("Error canceling training", e);
+            String errorMessage = extractApiErrorMessage(e.getMessage());
+            return new ExactlySyncResponseImpl(false, errorMessage);
+        }
+    }
+    
+    /**
+     * Get model details
+     */
+    @GraphQLField
+    @GraphQLName("getModel")
+    @GraphQLDescription("Get model details from Exactly.ai")
+    public ExactlySyncResponse getModel(@GraphQLName("styleUuid") String styleUuid) {
+        logger.info("GraphQL: getModel called for style: {}", styleUuid);
+        
+        // Lazy load services
+        if (exactlyService == null) {
+            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
+        }
+        if (styleRepository == null) {
+            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
+        }
+        
+        try {
+            String exactlyId = styleRepository.getExactlyId(styleUuid);
+            Map<String, Object> model = exactlyService.getModel(exactlyId);
+            
+            org.json.JSONObject jsonResult = new org.json.JSONObject(model);
+            String resultJson = jsonResult.toString();
+            
+            logger.info("Model details fetched successfully");
+            return new ExactlySyncResponseImpl(true, resultJson);
+            
+        } catch (Exception e) {
+            logger.error("Error fetching model details", e);
             String errorMessage = extractApiErrorMessage(e.getMessage());
             return new ExactlySyncResponseImpl(false, errorMessage);
         }

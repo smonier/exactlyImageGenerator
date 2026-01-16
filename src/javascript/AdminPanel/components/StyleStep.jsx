@@ -150,13 +150,15 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
                 node.properties?.forEach(prop => {
                     props[prop.name] = prop.value;
                 });
+                
                 return {
                     uuid: node.uuid,
                     name: props['eximg:name'] || node.displayName || node.name,
                     exactlyId: props['eximg:exactlyId'],
                     status: props['eximg:status'] || 'unknown',
                     active: props['eximg:active'] === 'true' || props['eximg:active'] === true,
-                    lastSynced: props['eximg:lastSynced']
+                    lastSynced: props['eximg:lastSynced'],
+                    description: props['eximg:description'] || ''
                 };
             });
             setStyles(loadedStyles);
@@ -192,7 +194,7 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
     }, [jcrData]);
 
     const handleStyleClick = style => {
-        onStyleSelect(style.uuid, style.name, style.status);
+        onStyleSelect(style.uuid, style.name, style.status, style.description);
     };
 
     return (
@@ -306,6 +308,11 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
                                             {style.name}
                                             {style.active && <span className="style-card__active-badge"> ✓ Active</span>}
                                         </Typography>
+                                        {style.description && (
+                                            <Typography variant="body" className="style-card__description">
+                                                {style.description}
+                                            </Typography>
+                                        )}
                                         <Typography variant="caption" className="style-card__id">
                                             ID: {style.exactlyId || style.uuid}
                                         </Typography>

@@ -13,13 +13,15 @@ const stepIcons = {
     2: () => <span>☁️</span>
 };
 
-const WizardNavigation = ({currentStep, steps, onStepClick}) => {
+const WizardNavigation = ({currentStep, steps, onStepClick, canProgress}) => {
     return (
         <div className="wizard-nav">
             {steps.map((step, index) => {
                 const StepIcon = stepIcons[step.id];
                 const isActive = currentStep === step.id;
                 const isCompleted = currentStep > step.id;
+                const isNextStep = step.id === currentStep + 1;
+                const isClickable = step.id <= currentStep || (isNextStep && canProgress);
                 
                 return (
                     <div
@@ -28,10 +30,13 @@ const WizardNavigation = ({currentStep, steps, onStepClick}) => {
                             isActive ? 'wizard-nav__step--active' : ''
                         } ${
                             isCompleted ? 'wizard-nav__step--completed' : ''
+                        } ${
+                            !isClickable ? 'wizard-nav__step--disabled' : ''
                         }`}
-                        onClick={() => onStepClick(step.id)}
+                        onClick={() => isClickable && onStepClick(step.id)}
                         role="button"
-                        tabIndex={0}
+                        tabIndex={isClickable ? 0 : -1}
+                        style={{cursor: isClickable ? 'pointer' : 'not-allowed'}}
                     >
                         <div className="wizard-nav__step__icon-wrapper">
                             {isCompleted ? (

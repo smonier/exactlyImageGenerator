@@ -31,7 +31,7 @@ public class JcrStyleRepository {
     /**
      * Find or create style node by Exactly ID
      */
-    public Node findOrCreateStyle(String siteKey, String exactlyId, String name, String status, Boolean active, String metadata) throws RepositoryException {
+    public Node findOrCreateStyle(String siteKey, String exactlyId, String name, String status, Boolean active, String metadata, String description) throws RepositoryException {
         return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
             // Validate inputs
             if (exactlyId == null || exactlyId.trim().isEmpty()) {
@@ -58,6 +58,9 @@ public class JcrStyleRepository {
                 }
                 if (metadata != null) {
                     existingStyle.setProperty("eximg:metadata", metadata);
+                }
+                if (description != null) {
+                    existingStyle.setProperty("eximg:description", description);
                 }
                 existingStyle.setProperty("eximg:lastSynced", Calendar.getInstance());
                 session.save();
@@ -86,6 +89,9 @@ public class JcrStyleRepository {
                 if (metadata != null) {
                     existingNode.setProperty("eximg:metadata", metadata);
                 }
+                if (description != null) {
+                    existingNode.setProperty("eximg:description", description);
+                }
                 existingNode.setProperty("eximg:lastSynced", Calendar.getInstance());
                 session.save();
                 logger.info("Updated existing node by name: {} (exactlyId: {})", existingNode.getPath(), exactlyId);
@@ -108,6 +114,9 @@ public class JcrStyleRepository {
             if (metadata != null) {
                 styleNode.setProperty("eximg:metadata", metadata);
             }
+            if (description != null) {
+                styleNode.setProperty("eximg:description", description);
+            }
             styleNode.setProperty("eximg:lastSynced", Calendar.getInstance());
             
             session.save();
@@ -119,7 +128,7 @@ public class JcrStyleRepository {
     /**
      * Update style node
      */
-    public Node updateStyle(String uuid, String name, String status, Boolean active, String metadata) throws RepositoryException {
+    public Node updateStyle(String uuid, String name, String status, Boolean active, String metadata, String description) throws RepositoryException {
         return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
             Node styleNode = session.getNodeByIdentifier(uuid);
             
@@ -134,6 +143,9 @@ public class JcrStyleRepository {
             }
             if (metadata != null) {
                 styleNode.setProperty("eximg:metadata", metadata);
+            }
+            if (description != null) {
+                styleNode.setProperty("eximg:description", description);
             }
             styleNode.setProperty("eximg:lastSynced", Calendar.getInstance());
             

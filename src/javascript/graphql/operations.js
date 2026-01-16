@@ -109,6 +109,20 @@ export const TRAIN_EXACTLY_STYLE = gql`
 `;
 
 /**
+ * Get model details
+ */
+export const GET_MODEL = gql`
+  mutation GetModel($styleUuid: String!) {
+    exactly {
+      getModel(styleUuid: $styleUuid) {
+        successful
+        message
+      }
+    }
+  }
+`;
+
+/**
  * Get training progress
  */
 export const GET_TRAINING_PROGRESS = gql`
