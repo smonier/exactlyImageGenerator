@@ -19,10 +19,15 @@ A complete Jahia OSGi module for integrating Exactly.ai image generation capabil
 ✅ **Server-Side Proxy** - Secure API calls to Exactly.ai without exposing tokens to the browser  
 ✅ **JCR Persistence** - Store styles and projects with full metadata  
 ✅ **GraphQL-First Design** - Complete GraphQL API for all operations  
-✅ **React UI** - Admin panel for managing styles and generating images  
+✅ **React UI** - Three-step wizard interface with visual feedback  
 ✅ **DAM Integration** - Direct integration with Jahia DAM for training and saving images  
 ✅ **Streaming Support** - Efficient handling of image uploads/downloads  
 ✅ **OSGi Configuration** - External configuration for API credentials  
+✅ **Real-Time Training Progress** - Live polling of training status with circular progress indicator  
+✅ **Style Management** - Sync, create, train, and manage custom Exactly.ai models  
+✅ **Clickable Wizard Navigation** - Jump to any completed step in the workflow  
+✅ **Status Badges** - Visual indicators for model status (draft, training, ready, failed)  
+✅ **Style Descriptions** - Store and display custom descriptions for each style  
 
 ---
 
@@ -49,7 +54,9 @@ org.jahia.se.modules.exactlyImageGenerator/
 ```
 - eximg:exactlyId (string)      # Remote style ID
 - eximg:name (string)           # Display name
-- eximg:status (string)         # active|training|failed
+- eximg:description (string)    # Custom style description
+- eximg:status (string)         # unknown|draft|active|training|ready|failed
+- eximg:active (boolean)        # Whether style is active
 - eximg:lastSynced (date)       # Last sync timestamp
 - eximg:metadata (string)       # JSON metadata
 - eximg:params (string)         # JSON parameters
@@ -168,51 +175,45 @@ Changes to the `.cfg` file are picked up automatically by OSGi. No restart requi
 
 1. Log in to Jahia as an administrator
 2. Navigate to: **Administration → Exactly.ai Image Generator**
-3. The React UI will load with four main steps
+3. The React UI will load with a three-step wizard interface
 
-### Workflow
+### Wizard Interface
 
-#### Step 1: Sync Styles
+The UI provides a guided workflow with three main steps:
 
-Click **"Sync Styles"** to fetch all available styles from your Exactly account and store them in JCR.
+#### Step 1: Select Style
 
-```
-POST /sites/systemsite/contents/exactly-styles
-```
+- View all synced styles from your Exactly.ai account
+- Click **"Sync Styles"** to refresh from the API
+- See style descriptions and status badges (draft, training, ready, failed)
+- Select a style to proceed to training or generation
 
-#### Step 2: Train a Style (Optional)
+#### Step 2: Train Model
 
-To train a custom style:
+- Upload training images from Jahia DAM by entering asset paths
+- View existing training images already uploaded to Exactly.ai
+- Start model training with the **"Train Model"** button
+- Monitor real-time training progress with circular progress indicator
+- Training status automatically updates every 5 seconds
+- Cancel training if needed
+- Status badge displays current model state in top right corner
 
-1. Select training images from Jahia DAM
-2. Provide the style UUID
-3. Call `trainExactlyStyle` mutation with DAM asset UUIDs
+#### Step 3: Generate & Save
 
-The module will:
-- Read binary data from DAM assets
-- Upload to Exactly API (multipart)
-- Start training
-- Create a project node tracking the training job
+- Enter a descriptive prompt for image generation
+- Configure parameters:
+  - Number of variations (1-8)
+  - Aspect ratio (9:16, 2:3, 3:4, 1:1, 4:3, 3:2, 16:9)
+- View generated images in a grid
+- Select which images to save to DAM
+- Choose target folder path for saved assets
 
-#### Step 3: Generate Images
+### Navigation Features
 
-1. Select a trained style (enter UUID)
-2. Write a descriptive prompt
-3. Click **"Generate Images"**
-
-The module will:
-- Call Exactly's generate endpoint
-- Store result URLs in a project node
-- Display generated images in the UI
-
-#### Step 4: Save to DAM
-
-Select which generated images to save and click **"Save to DAM"**
-
-The module will:
-- Download each image server-side
-- Create DAM assets (jnt:file nodes)
-- Link assets back to the project node
+- **Clickable Step Cards**: Jump directly to any completed step
+- **Visual Feedback**: Active step highlighted, completed steps marked with checkmark
+- **Blocked Navigation**: Cannot proceed to Generate step while model is training
+- **Status Indicators**: Color-coded badges show model status throughout workflow
 
 ---
 
@@ -220,55 +221,152 @@ The module will:
 
 ### Mutations
 
-#### syncExactlyStyles
-Sync styles from Exactly API to JCR
+#### syncStyles
+Sync styles from Exactly API to JCR, extracting descriptions from metadata
 ```graphql
-mutation {
-  syncExactlyStyles {
-    updatedStyles { uuid name status }
-    message
+mutation SyncExactlyStyles($siteKey: String!) {
+  exactly {
+    syncStyles(siteKey: $siteKey) {
+      successful
+      message
+    }
   }
 }
 ```
 
-#### trainExactlyStyle
-Upload training images and start training
+#### getModel
+Fetch model details from Exactly.ai
 ```graphql
-mutation TrainStyle($styleUuid: String!, $assets: [String!]!) {
-  trainExactlyStyle(styleNodeUuid: $styleUuid, damAssetUuids: $assets) {
-    projectUuid
-    remoteJobId
-    status
-    message
+mutation GetModel($styleUuid: String!) {
+  exactly {
+    getModel(styleUuid: $styleUuid) {
+      successful
+      message
+    }
   }
 }
 ```
 
-#### generateExactlyImages
-Generate images from a prompt
+#### uploadTrainingImages
+Upload DAM assets as training images to Exactly.ai
 ```graphql
-mutation Generate($styleUuid: String!, $prompt: String!) {
-  generateExactlyImages(styleNodeUuid: $styleUuid, prompt: $prompt) {
-    projectUuid
-    status
-    generatedRemoteUrls
-    message
+mutation UploadTrainingImages($styleUuid: String!, $damAssetUuids: [String!]!) {
+  exactly {
+    uploadTrainingImages(styleUuid: $styleUuid, damAssetUuids: $damAssetUuids) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### getTrainingImages
+Retrieve existing training images for a style
+```graphql
+mutation GetTrainingImages($styleUuid: String!) {
+  exactly {
+    getTrainingImages(styleUuid: $styleUuid) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### trainStyle
+Start model training with uploaded images
+```graphql
+mutation TrainExactlyStyle($styleUuid: String!) {
+  exactly {
+    trainStyle(styleUuid: $styleUuid) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### getTrainingProgress
+Check training progress (polled every 5 seconds during training)
+```graphql
+mutation GetTrainingProgress($styleUuid: String!) {
+  exactly {
+    getTrainingProgress(styleUuid: $styleUuid) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### cancelTraining
+Cancel an ongoing training job
+```graphql
+mutation CancelTraining($styleUuid: String!) {
+  exactly {
+    cancelTraining(styleUuid: $styleUuid) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### putModelToDraft
+Reset a trained model back to draft status
+```graphql
+mutation PutModelToDraft($styleUuid: String!) {
+  exactly {
+    putModelToDraft(styleUuid: $styleUuid) {
+      successful
+      message
+    }
+  }
+}
+```
+
+#### generateImages
+Generate images from a trained style and prompt
+```graphql
+mutation GenerateExactlyImages(
+  $styleUuid: String!
+  $prompt: String!
+  $numImages: Int
+  $width: Int
+  $height: Int
+) {
+  exactly {
+    generateImages(
+      styleUuid: $styleUuid
+      prompt: $prompt
+      numImages: $numImages
+      width: $width
+      height: $height
+    ) {
+      successful
+      message
+    }
   }
 }
 ```
 
 #### saveGeneratedImagesToDam
-Save generated images to DAM
+Save selected generated images to Jahia DAM
 ```graphql
-mutation SaveToDam($projectUuid: String!, $folderPath: String!, $selection: [GeneratedImageSelectionInput!]!) {
-  saveGeneratedImagesToDam(
-    projectNodeUuid: $projectUuid
-    targetFolderPath: $folderPath
-    selection: $selection
-  ) {
-    projectUuid
-    assets { uuid path name }
-    message
+mutation SaveGeneratedImagesToDam(
+  $projectUuid: String!
+  $imageUrls: [String!]!
+  $targetFolder: String!
+) {
+  exactly {
+    saveGeneratedImagesToDam(
+      projectUuid: $projectUuid
+      imageUrls: $imageUrls
+      targetFolder: $targetFolder
+    ) {
+      successful
+      message
+    }
   }
 }
 ```
@@ -403,13 +501,15 @@ Changes to React files require rebuilding the module.
 
 Based on https://api.exactly.ai/public/docs/
 
-- `GET /styles` - List all styles
-- `POST /styles` - Create style
-- `POST /styles/{id}/images` - Upload training images (multipart)
-- `POST /styles/{id}/train` - Start training
-- `GET /styles/{id}/status` - Check training status
-- `POST /generate` - Generate images
-- `GET /generate/{jobId}` - Check generation status
+- `GET /models` - List all models/styles
+- `GET /models/{uid}` - Get model details
+- `POST /models` - Create new model
+- `POST /models/{uid}/images` - Upload training images (multipart)
+- `POST /models/{uid}/train` - Start training
+- `GET /models/{uid}/train/progress` - Get training progress (polled every 5s)
+- `POST /models/{uid}/train/cancel` - Cancel training
+- `PUT /models/{uid}/draft` - Put model back to draft
+- `POST /models/{uid}/generate` - Generate images with trained model
 
 ### Java Services
 
@@ -432,9 +532,14 @@ InputStream getStreamFromUrl(String absoluteUrl)
 **ExactlyService**
 ```java
 List<Map<String, Object>> listStyles()
+Map<String, Object> getModel(String modelUid)
 Map<String, Object> uploadTrainingImages(String styleId, List<String> damAssetUuids)
 Map<String, Object> trainStyle(String styleId)
+Map<String, Object> getTrainingProgress(String modelUid)
+Map<String, Object> cancelTraining(String modelUid)
+Map<String, Object> putModelToDraft(String modelUid)
 Map<String, Object> generateImages(String styleId, String prompt, String paramsJson)
+List<Map<String, Object>> getTrainingImages(String modelUid)
 InputStream downloadImage(String url)
 ```
 
@@ -447,8 +552,9 @@ Node createDamAssetByFolderUuid(String targetFolderUuid, String fileName, String
 
 **JcrStyleRepository**
 ```java
-Node findOrCreateStyle(String exactlyId, String name, String metadata)
-Node updateStyle(String uuid, String name, String status, String metadata)
+Node findOrCreateStyle(String exactlyId, String name, String status, Boolean active, String description, String metadata)
+Node updateStyle(String uuid, String name, String status, Boolean active, String description, String metadata)
+String getExactlyId(String uuid)
 Node getStyleByUuid(String uuid)
 List<Node> listAllStyles()
 ```
@@ -515,15 +621,24 @@ Contributions welcome! Please:
 
 ## Roadmap
 
+Recent additions:
+- [x] Real-time training progress monitoring with polling
+- [x] Clickable wizard navigation
+- [x] Visual status badges throughout UI
+- [x] Style description storage and display
+- [x] Model status synchronization
+- [x] Training cancellation support
+- [x] Put model to draft functionality
+
 Future enhancements:
-- [ ] Polling mechanism for async jobs
-- [ ] Style status monitoring UI
 - [ ] Batch image generation
 - [ ] Custom parameter presets
-- [ ] Training dataset management
+- [ ] Training dataset management UI
 - [ ] Generation history view
 - [ ] Image editing before saving
 - [ ] Multi-site support
+- [ ] Advanced filtering and search for styles
+- [ ] Image variation controls
 
 ---
 
