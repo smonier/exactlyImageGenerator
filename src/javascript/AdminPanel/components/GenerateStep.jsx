@@ -11,6 +11,8 @@ import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
 import {Button, Typography, Input, Loader, Checkbox} from '@jahia/moonstone';
+import {Star} from '@jahia/moonstone/dist/icons';
+
 import {GENERATE_EXACTLY_IMAGES, SAVE_GENERATED_IMAGES_TO_DAM} from '../../graphql/operations';
 import './GenerateStep.css';
 
@@ -26,7 +28,8 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
     const [aspectRatio, setAspectRatio] = useState('1:1');
     const [projectUuid, setProjectUuid] = useState(null);
     const [selectedImages, setSelectedImages] = useState([]);
-    const [targetFolder, setTargetFolder] = useState('/sites/systemsite/files/exactly-generated');
+    const siteKey = getSiteKey();
+    const [targetFolder, setTargetFolder] = useState(`/sites/${siteKey}/files/exactly-generated`);
     const [selectedFolder, setSelectedFolder] = useState(null);
     const [savedAssets, setSavedAssets] = useState([]);
     const [useReferenceImages, setUseReferenceImages] = useState(false);
@@ -457,6 +460,7 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
             {/* Generate Button */}
             <div className="generate-step__actions">
                 <Button
+                    icon={<Star />}
                     label={generating ? t('generate.generating') : t('generate.generateButton')}
                     disabled={generating || !prompt.trim()}
                     onClick={handleGenerate}

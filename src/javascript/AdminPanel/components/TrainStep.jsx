@@ -10,6 +10,7 @@ import React, {useState, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
 import {Button, Typography, Input, Loader} from '@jahia/moonstone';
+import {CloudUpload} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {TRAIN_EXACTLY_STYLE, UPLOAD_TRAINING_IMAGES, GET_TRAINING_IMAGES, DELETE_TRAINING_IMAGE, GET_TRAINING_PROGRESS, PUT_MODEL_TO_DRAFT, CANCEL_TRAINING} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
@@ -108,7 +109,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
 
     // Watch for status changes and start/stop polling accordingly
     useEffect(() => {
-        if (trainingStatus?.status === 'training' && trainingStatus?.progress < 100) {
+        if (trainingStatus?.status === 'training') {
             // Start polling if not already polling
             if (!progressIntervalRef.current) {
                 startProgressPolling();
@@ -117,7 +118,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
             // Stop polling if training is complete or not training
             stopProgressPolling();
         }
-    }, [trainingStatus?.status, trainingStatus?.progress]);
+    }, [trainingStatus?.status]);
 
     const [trainStyle, {loading: training}] = useMutation(TRAIN_EXACTLY_STYLE, {
         onCompleted: data => {
@@ -127,17 +128,32 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
                     const result = JSON.parse(response.message);
                     setTrainingStatus({
                         jobId: result.jobId,
-                        status: result.status,
+                        status: 'training',
+                        progress: 0,
                         message: 'Training started'
+                    });
+                    // Immediately fetch the actual status from the API
+                    getProgress({
+                        variables: {
+                            styleUuid: styleUuid
+                        }
                     });
                     // Start polling for progress
                     startProgressPolling();
                 } catch (e) {
                     console.error('Failed to parse training result:', e);
                     setTrainingStatus({
-                        status: 'started',
+                        status: 'training',
+                        progress: 0,
                         message: response.message
                     });
+                    // Still fetch progress and start polling
+                    getProgress({
+                        variables: {
+                            styleUuid: styleUuid
+                        }
+                    });
+                    startProgressPolling();
                 }
             } else {
                 // Handle error response from backend
@@ -167,8 +183,8 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
                     const progress = JSON.parse(data.exactly.getTrainingProgress.message);
                     setTrainingStatus(prev => ({
                         ...prev,
-                        status: progress.status,
-                        progress: progress.progress,
+                        status: progress.status || prev.status || 'training',
+                        progress: progress.progress !== undefined ? progress.progress : (prev.progress || 0),
                         message: progress.progress === 100 ? 'Training complete' : 'Training in progress'
                     }));
                     
@@ -559,6 +575,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
             <div className="train-step__actions">
                 <Button
                     label={uploading ? t('train.uploading') : t('train.uploadButton')}
+                    icon={<CloudUpload />}
                     color="accent"
                     variant="outlined"
                     disabled={uploading || selectedAssets.length === 0 || styleStatus === 'training' || styleStatus === 'ready'}
@@ -580,21 +597,15 @@ const TrainStep = ({styleUuid, styleName, styleStatus, onTrainingStart, onError}
                     />
                 ) : (
                     <Button
-                        label={
-                            trainingStatus?.progress > 0 && trainingStatus?.progress < 100
-                                ? t('train.inProgress')
-                                : training
-                                ? t('train.training')
-                                : t('train.startButton')
-                        }
-                        disabled={training || existingImages.length === 0 || (trainingStatus?.progress > 0 && trainingStatus?.progress < 100)}
+                        label={training ? t('train.training') : t('train.startButton')}
+                        disabled={training || existingImages.length === 0}
                         onClick={handleStartTraining}
                     />
                 )}
             </div>
 
-            {/* Training Status - Show when training status is 'training' or when progress > 0 */}
-            {trainingStatus && (trainingStatus.status === 'training' || trainingStatus.progress > 0) && (
+            {/* Training Status - Show when training */}
+            {trainingStatus && (trainingStatus.status === 'training' || trainingStatus.jobId) && (
                 <div className="train-step__status">
                     <Typography variant="subheading">{t('train.statusTitle')}</Typography>
                     <div className="train-step__status-content">
