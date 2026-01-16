@@ -21,7 +21,7 @@ const getSiteKey = () => {
     return window.contextJsParameters?.siteKey || 'systemsite';
 };
 
-const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete, onError}) => {
+const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, onGenerationComplete, onError}) => {
     const {t} = useTranslation('exactlyImageGenerator');
     const [prompt, setPrompt] = useState('');
     const [numVariations, setNumVariations] = useState(4);
@@ -295,6 +295,11 @@ const GenerateStep = ({styleUuid, styleName, generatedUrls, onGenerationComplete
                 <Typography variant="body" className="generate-step__style-info">
                     {t('generate.usingStyle')}: <strong>{styleName}</strong>
                 </Typography>
+                {styleDescription && (
+                    <Typography variant="body" className="generate-step__style-description">
+                        {styleDescription}
+                    </Typography>
+                )}
             </div>
 
             {/* Prompt Section */}

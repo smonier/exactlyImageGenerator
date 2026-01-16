@@ -9,6 +9,12 @@
     color: #666;
 }
 
+.generate-step__style-description {
+    margin-top: 8px;
+    color: #555;
+    font-style: italic;
+}
+
 .generate-step__section {
     margin-bottom: 24px;
 }

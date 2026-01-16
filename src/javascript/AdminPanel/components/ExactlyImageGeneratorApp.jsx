@@ -184,6 +184,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                         <GenerateStep
                             styleUuid={selectedStyleUuid}
                             styleName={selectedStyleName}
+                            styleDescription={selectedStyleDescription}
                             generatedUrls={generatedUrls}
                             onGenerationComplete={(_projectUuid, urls) => {
                                 setGeneratedUrls(urls);
