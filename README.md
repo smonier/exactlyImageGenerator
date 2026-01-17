@@ -20,7 +20,7 @@ A complete Jahia OSGi module for integrating Exactly.ai image generation capabil
 ✅ **JCR Persistence** - Store styles and projects with full metadata  
 ✅ **GraphQL-First Design** - Complete GraphQL API for all operations  
 ✅ **React UI** - Three-step wizard interface with visual feedback  
-✅ **DAM Integration** - Direct integration with Jahia DAM for training and saving images  
+✅ **Jahia Medi Manager Integration** - Direct integration with Jahia Media Manager for training and saving images  
 ✅ **Streaming Support** - Efficient handling of image uploads/downloads  
 ✅ **OSGi Configuration** - External configuration for API credentials  
 ✅ **Real-Time Training Progress** - Live polling of training status with circular progress indicator  
@@ -41,7 +41,7 @@ org.jahia.se.modules.exactlyImageGenerator/
 ├── proxy/                  # HTTP client for Exactly API
 ├── services/               # Business logic layer
 │   ├── ExactlyService      # High-level API wrapper
-│   ├── DamService          # DAM operations
+│   ├── DamService          # Jahia Media Manager operations
 │   ├── JcrStyleRepository  # Style persistence
 │   └── JcrProjectRepository # Project persistence
 └── graphql/                # GraphQL schema and resolvers
@@ -72,7 +72,7 @@ org.jahia.se.modules.exactlyImageGenerator/
 - eximg:metadata (string)                # JSON metadata
 - eximg:remoteJobId (string)             # Remote job reference
 - eximg:generatedRemoteUrls (string[])   # Generated image URLs
-- eximg:generatedAssetUuids (string[])   # Linked DAM assets
+- eximg:generatedAssetUuids (string[])   # Linked Media Manager assets
 - eximg:createdAt (date)                 # Creation timestamp
 - eximg:updatedAt (date)                 # Last update timestamp
 ```
@@ -190,7 +190,7 @@ The UI provides a guided workflow with three main steps:
 
 #### Step 2: Train Model
 
-- Upload training images from Jahia DAM by entering asset paths
+- Upload training images from Jahia Media Manager by entering asset paths
 - View existing training images already uploaded to Exactly.ai
 - Start model training with the **"Train Model"** button
 - Monitor real-time training progress with circular progress indicator
@@ -205,7 +205,7 @@ The UI provides a guided workflow with three main steps:
   - Number of variations (1-8)
   - Aspect ratio (9:16, 2:3, 3:4, 1:1, 4:3, 3:2, 16:9)
 - View generated images in a grid
-- Select which images to save to DAM
+- Select which images to save to Jahia Media Manager
 - Choose target folder path for saved assets
 
 ### Navigation Features
@@ -249,7 +249,7 @@ mutation GetModel($styleUuid: String!) {
 ```
 
 #### uploadTrainingImages
-Upload DAM assets as training images to Exactly.ai
+Upload Jahia Media Manager assets as training images to Exactly.ai
 ```graphql
 mutation UploadTrainingImages($styleUuid: String!, $damAssetUuids: [String!]!) {
   exactly {
@@ -352,7 +352,7 @@ mutation GenerateExactlyImages(
 ```
 
 #### saveGeneratedImagesToDam
-Save selected generated images to Jahia DAM
+Save selected generated images to Jahia Media Manager
 ```graphql
 mutation SaveGeneratedImagesToDam(
   $projectUuid: String!
@@ -408,8 +408,8 @@ See [GRAPHQL_OPERATIONS.md](./GRAPHQL_OPERATIONS.md) for complete examples.
 
 All GraphQL mutations enforce:
 - User must be authenticated
-- User must have READ permission on source DAM assets
-- User must have CREATE permission on target DAM folders
+- User must have READ permission on source Media Manager assets
+- User must have CREATE permission on target Media Manager folders
 
 ### Logging
 
@@ -437,7 +437,7 @@ The React UI has been refactored with a clean, modular architecture:
 
 **hooks/** - Custom React hooks
 - `useTraining.js` - Training operations (upload, delete, start, progress polling)
-- `useGeneration.js` - Generation operations (generate, save to DAM, selection)
+- `useGeneration.js` - Generation operations (generate, save to Media Manager, selection)
 
 **components/** - React components
 - Refactored to use custom hooks and utilities
@@ -632,7 +632,7 @@ Node linkGeneratedAssets(String uuid, List<String> assetUuids)
 - Test mutations manually
 - Check user permissions
 
-### Images not saving to DAM
+### Images not saving to Jahia Media Manager
 - Verify target folder exists
 - Check user has CREATE permission
 - Verify URLs are accessible from server
