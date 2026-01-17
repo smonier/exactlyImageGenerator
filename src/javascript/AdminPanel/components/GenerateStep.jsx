@@ -172,6 +172,13 @@ const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, on
     };
 
     const handleAddReferenceImage = () => {
+        // Check if CE_API is available
+        if (!window.CE_API || !window.CE_API.openPicker) {
+            onError('Content Editor API is not available. Please make sure you are in the Jahia administration interface.');
+            console.error('CE_API not available:', window.CE_API);
+            return;
+        }
+        
         window.CE_API.openPicker({
             type: 'image',
             site: window.jahiaGWTParameters?.siteKey || 'digitall',

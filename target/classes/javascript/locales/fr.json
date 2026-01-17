@@ -53,6 +53,7 @@
     "assetUuidPlaceholder": "Entrez l'UUID de la ressource Jahia Media Manager et appuyez sur Entrée",
     "addAsset": "Ajouter une ressource",
     "selectedAssets": "{{count}} ressources sélectionnées",
+    "imageSizeRequirement": "Assurez-vous que la plus petite dimension d'une image soit d'au moins 1024px",
     "uploadButton": "Télécharger les images vers Exactly.ai",
     "uploading": "Téléversement...",
     "startButton": "Démarrer l'entraînement",

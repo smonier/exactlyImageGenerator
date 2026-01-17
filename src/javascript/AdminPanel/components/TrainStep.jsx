@@ -618,6 +618,9 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
 
             {/* Training Action */}
             <div className="train-step__actions">
+                <Typography variant="caption" style={{fontStyle: 'italic', marginBottom: '12px', display: 'block'}}>
+                    {t('train.imageSizeRequirement')}
+                </Typography>
                 <Button
                     label={uploading ? t('train.uploading') : t('train.uploadButton')}
                     icon={<CloudUpload />}

@@ -1,5 +1,5 @@
 Manifest-Version: 1.0
-Bnd-LastModified: 1768602512216
+Bnd-LastModified: 1768648799539
 Build-Jdk-Spec: 17
 Bundle-Category: jahia-module
 Bundle-ClassPath: .,json-20210307.jar
@@ -18,9 +18,9 @@ Export-Package: org.jahia.se.modules.exactlyImageGenerator.graphql;uses:
  ="graphql.annotations.annotationTypes,org.jahia.modules.graphql.provide
  r.dxm";version="1.0.0"
 Git-branch: main
-Git-commit-desc: token cleared
-Git-last-commit-id: 5366b374a478c4127737ad58655bcbfe5afeb7db
-Git-last-commit-time: 2026-01-16T23:13:19+0100
+Git-commit-desc: jump to step 3 when model is ready
+Git-last-commit-id: 9a5b4bc1a131a635a39245b767537cc94532406d
+Git-last-commit-time: 2026-01-16T23:30:30+0100
 Implementation-Title: Exactly.ai Image Generator
 Implementation-URL: http://www.jahia.com
 Implementation-Vendor: Jahia Solutions Group SA

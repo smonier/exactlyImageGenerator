@@ -56,6 +56,7 @@
     "assetUuidPlaceholder": "Enter Jahia Media Manager asset UUID and press Enter",
     "addAsset": "Add Asset",
     "selectedAssets": "{{count}} assets selected",
+    "imageSizeRequirement": "Make sure the shortest size of an image is at least 1024px",
     "uploadButton": "Upload Images to Exactly.ai",
     "uploading": "Uploading...",
     "startButton": "Start Training",
