@@ -8,11 +8,12 @@
  * - Step 4: Save to DAM
  */
 
-import React, {useState} from 'react';
+import React, {useState, useCallback, useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Typography, Button} from '@jahia/moonstone';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {createApolloClient} from '../../graphql/apolloClient';
+import {STEPS, STATUS} from '../../utils/constants';
 import StyleStep from './StyleStep';
 import TrainStep from './TrainStep';
 import GenerateStep from './GenerateStep';
@@ -21,12 +22,6 @@ import ErrorBanner from './ErrorBanner';
 import './ExactlyImageGeneratorApp.css';
 
 const apolloClient = createApolloClient();
-
-const STEPS = {
-    STYLE: 0,
-    TRAIN: 1,
-    GENERATE: 2
-};
 
 const ExactlyImageGeneratorApp = ({renderHeader}) => {
     const {
@@ -47,44 +42,94 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
     const [generatedUrls, setGeneratedUrls] = useState([]);
 
     // Navigation handlers
-    const canProgress = () => {
+    const canProgress = useCallback(() => {
         switch (currentStep) {
             case STEPS.STYLE:
                 return selectedStyleUuid !== null;
             case STEPS.TRAIN:
-                // Can only progress to Generate if model is not currently training
-                return selectedStyleStatus !== 'training';
+                // Can only progress to Generate if model is READY
+                return selectedStyleStatus === STATUS.READY;
             case STEPS.GENERATE:
                 return false; // Final step
             default:
                 return false;
         }
-    };
+    }, [currentStep, selectedStyleUuid, selectedStyleStatus]);
 
-    const handleNext = () => {
+    const handleNext = useCallback(() => {
         if (canProgress()) {
             setCurrentStep(prev => Math.min(prev + 1, STEPS.GENERATE));
         }
-    };
+    }, [canProgress]);
 
-    const handleBack = () => {
+    const handleBack = useCallback(() => {
         setCurrentStep(prev => Math.max(prev - 1, STEPS.STYLE));
-    };
+    }, []);
 
-    const handleReset = () => {
+    const handleReset = useCallback(() => {
         setShowResetDialog(true);
-    };
+    }, []);
 
-    const confirmReset = () => {
+    const confirmReset = useCallback(() => {
         setCurrentStep(STEPS.STYLE);
         setSelectedStyleUuid(null);
         setSelectedStyleName('');
-        setSelectedStyleStatus('unknown');
+        setSelectedStyleStatus(STATUS.UNKNOWN);
         setSelectedStyleDescription('');
         setGeneratedUrls([]);
         setGlobalError(null);
         setShowResetDialog(false);
-    };
+    }, []);
+    
+    const handleStyleSelect = useCallback((uuid, name, status, description) => {
+        setSelectedStyleUuid(uuid);
+        setSelectedStyleName(name);
+        setSelectedStyleStatus(status || STATUS.UNKNOWN);
+        setSelectedStyleDescription(description || '');
+    }, []);
+    
+    const handleStepClick = useCallback((step) => {
+        // Step 3 (Generate) is ONLY accessible when model status is READY
+        if (step === STEPS.GENERATE && selectedStyleStatus !== STATUS.READY) {
+            return; // Block access to Generate step if model is not ready
+        }
+        
+        // Can go back to any previous step (except Generate if not ready)
+        if (step <= currentStep) {
+            setCurrentStep(step);
+            return;
+        }
+        
+        // Forward navigation: can jump to Generate if model is ready
+        if (step === STEPS.GENERATE && selectedStyleStatus === STATUS.READY) {
+            setCurrentStep(step);
+            return;
+        }
+        
+        // Otherwise, can only move to next step if canProgress allows it
+        if (step === currentStep + 1 && canProgress()) {
+            setCurrentStep(step);
+        }
+    }, [currentStep, selectedStyleStatus, canProgress]);
+    
+    const handleGenerationComplete = useCallback((_projectUuid, urls) => {
+        setGeneratedUrls(urls);
+    }, []);
+    
+    const handleError = useCallback((error) => {
+        setGlobalError(error);
+    }, []);
+    
+    const handleDismissError = useCallback(() => {
+        setGlobalError(null);
+    }, []);
+    
+    // Memoized wizard steps
+    const wizardSteps = useMemo(() => [
+        {id: STEPS.STYLE, label: t('steps.style')},
+        {id: STEPS.TRAIN, label: t('steps.train')},
+        {id: STEPS.GENERATE, label: t('steps.generate')}
+    ], [t]);
 
     // Render header with current state
     React.useEffect(() => {
@@ -131,38 +176,15 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                     {globalError && (
                         <ErrorBanner
                             message={globalError}
-                            onDismiss={() => setGlobalError(null)}
+                            onDismiss={handleDismissError}
                         />
                     )}
 
                     {/* Wizard Navigation */}
                     <WizardNavigation
                         currentStep={currentStep}
-                        steps={[
-                            {id: STEPS.STYLE, label: t('steps.style')},
-                            {id: STEPS.TRAIN, label: t('steps.train')},
-                            {id: STEPS.GENERATE, label: t('steps.generate')}
-                        ]}
-                        onStepClick={step => {
-                            // Allow navigation to any accessible step
-                            // Can go back to any previous step
-                            if (step <= currentStep) {
-                                setCurrentStep(step);
-                                return;
-                            }
-                            
-                            // Forward navigation logic
-                            // If on Style step and model is ready, allow jumping directly to Generate
-                            if (currentStep === STEPS.STYLE && step === STEPS.GENERATE && selectedStyleStatus === 'ready') {
-                                setCurrentStep(step);
-                                return;
-                            }
-                            
-                            // Otherwise, can only move to next step if canProgress allows it
-                            if (step === currentStep + 1 && canProgress()) {
-                                setCurrentStep(step);
-                            }
-                        }}
+                        steps={wizardSteps}
+                        onStepClick={handleStepClick}
                         canProgress={canProgress()}
                         selectedStyleStatus={selectedStyleStatus}
                     />
@@ -173,13 +195,8 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                         <StyleStep
                             selectedStyleUuid={selectedStyleUuid}
                             selectedStyleName={selectedStyleName}
-                            onStyleSelect={(uuid, name, status, description) => {
-                                setSelectedStyleUuid(uuid);
-                                setSelectedStyleName(name);
-                                setSelectedStyleStatus(status || 'unknown');
-                                setSelectedStyleDescription(description || '');
-                            }}
-                            onError={setGlobalError}
+                            onStyleSelect={handleStyleSelect}
+                            onError={handleError}
                         />
                     )}
 
@@ -190,7 +207,7 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                             styleStatus={selectedStyleStatus}
                             styleDescription={selectedStyleDescription}
                             onTrainComplete={() => {/* Training complete */}}
-                            onError={setGlobalError}
+                            onError={handleError}
                         />
                     )}
 
@@ -200,10 +217,8 @@ const ExactlyImageGeneratorApp = ({renderHeader}) => {
                             styleName={selectedStyleName}
                             styleDescription={selectedStyleDescription}
                             generatedUrls={generatedUrls}
-                            onGenerationComplete={(_projectUuid, urls) => {
-                                setGeneratedUrls(urls);
-                            }}
-                            onError={setGlobalError}
+                            onGenerationComplete={handleGenerationComplete}
+                            onError={handleError}
                         />
                     )}
                 </div>

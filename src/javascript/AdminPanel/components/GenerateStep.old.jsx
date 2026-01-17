@@ -1,5 +1,5 @@
 /**
- * Step 3: Generate & Save - Refactored
+ * Step 3: Generate & Save
  *
  * - Enter prompt and params
  * - Generate images
@@ -7,198 +7,293 @@
  * - Select and save to DAM
  */
 
-import React, {useState, useCallback, useMemo} from 'react';
+import React, {useState} from 'react';
 import {useTranslation} from 'react-i18next';
+import {useMutation} from '@apollo/client';
 import {Button, Typography, Input, Loader, Checkbox} from '@jahia/moonstone';
 import {Star} from '@jahia/moonstone/dist/icons';
 
-import {
-    useGenerateImages,
-    useSaveToDAM,
-    useImageSelection
-} from '../../hooks/useGeneration';
-import {openImagePicker, openFolderPicker} from '../../utils/pickerHelpers';
-import {isCEAPIAvailable, getSiteKey, getDefaultTargetFolder} from '../../utils/jahiaHelpers';
-import {imageUrlToBase64} from '../../utils/imageHelpers';
-import {DEFAULTS} from '../../utils/constants';
-
+import {GENERATE_EXACTLY_IMAGES, SAVE_GENERATED_IMAGES_TO_DAM} from '../../graphql/operations';
 import './GenerateStep.css';
+
+// Get current site key from Jahia context
+const getSiteKey = () => {
+    return window.contextJsParameters?.siteKey || 'systemsite';
+};
 
 const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, onGenerationComplete, onError}) => {
     const {t} = useTranslation('exactlyImageGenerator');
-    
-    // Form state
     const [prompt, setPrompt] = useState('');
-    const [numVariations, setNumVariations] = useState(DEFAULTS.NUM_VARIATIONS);
-    const [aspectRatio, setAspectRatio] = useState(DEFAULTS.ASPECT_RATIO);
-    const [targetFolder, setTargetFolder] = useState(getDefaultTargetFolder(getSiteKey()));
-    
-    // Reference images state
+    const [numVariations, setNumVariations] = useState(4);
+    const [aspectRatio, setAspectRatio] = useState('1:1');
+    const [projectUuid, setProjectUuid] = useState(null);
+    const [selectedImages, setSelectedImages] = useState([]);
+    const siteKey = getSiteKey();
+    const [targetFolder, setTargetFolder] = useState(`/sites/${siteKey}/files/exactly-generated`);
+    const [selectedFolder, setSelectedFolder] = useState(null);
+    const [savedAssets, setSavedAssets] = useState([]);
     const [useReferenceImages, setUseReferenceImages] = useState(false);
     const [referenceImages, setReferenceImages] = useState([]);
     
-    // Custom hooks
-    const {generate, loading: generating, projectUuid} = useGenerateImages(
-        styleUuid,
-        (jobId, urls) => {
-            onGenerationComplete(jobId, urls);
-            selectAll(urls.length);
+    // Convert aspect ratio to pixel dimensions
+    const aspectRatioToSize = (ratio) => {
+        const ratioMap = {
+            '9:16': [576, 1024],
+            '2:3': [683, 1024],
+            '3:4': [768, 1024],
+            '1:1': [1024, 1024],
+            '4:3': [1024, 768],
+            '3:2': [1024, 683],
+            '16:9': [1024, 576]
+        };
+        return ratioMap[ratio] || [1024, 1024];
+    };
+
+    const [generateImages, {loading: generating}] = useMutation(GENERATE_EXACTLY_IMAGES, {
+        onCompleted: data => {
+            if (data?.exactly?.generateImages?.successful) {
+                const response = data.exactly.generateImages;
+                try {
+                    const result = JSON.parse(response.message);
+                    const urls = result.urls || [];
+                    const jobId = result.jobId;
+                    
+                    setProjectUuid(jobId);
+                    onGenerationComplete(jobId, urls);
+                    // Select all by default
+                    setSelectedImages(urls.map((_, idx) => idx));
+                } catch (e) {
+                    console.error('Failed to parse generation result:', e);
+                    onError(t('errors.generationFailed', {message: response.message}));
+                }
+            } else {
+                const errorMsg = data?.exactly?.generateImages?.message || 'Generation failed';
+                onError(t('errors.generationFailed', {message: errorMsg}));
+            }
         },
-        onError
-    );
-    
-    const {save, loading: saving, savedAssets, setSavedAssets} = useSaveToDAM(
-        () => console.log('Images saved successfully'),
-        onError
-    );
-    
-    const {selectedImages, toggleImage, selectAll, isSelected} = useImageSelection();
-    
-    // Handlers
-    const handleGenerate = useCallback(() => {
+        onError: error => {
+            console.error('Generation error:', error);
+            onError(t('errors.generationFailed', {message: error.message}));
+        }
+    });
+
+    const [saveToDam, {loading: saving}] = useMutation(SAVE_GENERATED_IMAGES_TO_DAM, {
+        onCompleted: data => {
+            if (data?.exactly?.saveGeneratedImagesToDam?.successful) {
+                // Success - can show message or confirmation
+                console.log('Images saved successfully');
+            } else {
+                const errorMsg = data?.exactly?.saveGeneratedImagesToDam?.message || 'Save failed';
+                onError(t('errors.saveFailed', {message: errorMsg}));
+            }
+        },
+        onError: error => {
+            console.error('Save error:', error);
+            onError(t('errors.saveFailed', {message: error.message}));
+        }
+    });
+
+    const handleGenerate = () => {
         if (!prompt.trim()) {
             onError(t('errors.noPrompt'));
             return;
         }
-        
-        const refImages = useReferenceImages ? referenceImages : [];
-        generate(prompt, numVariations, aspectRatio, refImages);
-    }, [prompt, numVariations, aspectRatio, useReferenceImages, referenceImages, generate, onError, t]);
-    
-    const handleImageToggle = useCallback((index) => {
-        toggleImage(index);
-    }, [toggleImage]);
-    
-    const handleOpenFolderPicker = useCallback(() => {
-        if (!isCEAPIAvailable()) {
-            onError('Content Editor API is not available');
-            return;
+
+        // Build params from selections
+        const size = aspectRatioToSize(aspectRatio);
+        const params = {
+            num_images: numVariations,
+            size: size
+        };
+
+        // Add reference images if enabled
+        if (useReferenceImages && referenceImages.length > 0) {
+            params.reference_images = referenceImages.map(ref => ({
+                base64: ref.base64,
+                purpose: ref.purpose,
+                ...(ref.purpose === 'sketch' && ref.strength !== undefined ? {strength: ref.strength} : {})
+            }));
         }
-        
-        openFolderPicker((selectedItems) => {
-            if (selectedItems && selectedItems.length > 0) {
-                const folder = selectedItems[0];
-                setTargetFolder(folder.path || folder.url);
+
+        generateImages({
+            variables: {
+                styleUuid: styleUuid,
+                prompt: prompt,
+                params: JSON.stringify(params)
             }
         });
-    }, [onError]);
-    
-    const handleSaveToDam = useCallback(() => {
+    };
+
+    const handleImageToggle = index => {
+        setSelectedImages(prev => {
+            if (prev.includes(index)) {
+                return prev.filter(i => i !== index);
+            }
+
+            return [...prev, index];
+        });
+    };
+
+    const handleOpenFolderPicker = () => {
+        window.CE_API.openPicker({
+            type: 'folder',
+            site: window.jahiaGWTParameters?.siteKey || 'digitall',
+            lang: window.jahiaGWTParameters?.uilang || 'en',
+            isMultiple: false,
+            setValue: (selectedItems) => {
+                if (selectedItems && selectedItems.length > 0) {
+                    const folder = selectedItems[0];
+                    setSelectedFolder(folder);
+                    setTargetFolder(folder.path || folder.url);
+                }
+            }
+        });
+    };
+
+    const handleSaveToDam = () => {
         if (selectedImages.length === 0) {
             onError(t('errors.noSelection'));
             return;
         }
-        
-        save(projectUuid, selectedImages, generatedUrls, targetFolder, prompt);
-    }, [selectedImages, projectUuid, generatedUrls, targetFolder, prompt, save, onError, t]);
-    
-    const handleAddReferenceImage = useCallback(async () => {
-        if (!isCEAPIAvailable()) {
+
+        const selection = selectedImages.map(idx => ({
+            remoteUrl: generatedUrls[idx],
+            fileName: `generated-${Date.now()}-${idx}.png`,
+            title: `Generated: ${prompt.substring(0, 50)}`
+        }));
+
+        saveToDam({
+            variables: {
+                projectUuid: projectUuid,
+                folderPath: targetFolder,
+                selectionJson: JSON.stringify(selection)
+            }
+        });
+    };
+
+    const handleAddReferenceImage = () => {
+        // Check if CE_API is available
+        if (!window.CE_API || !window.CE_API.openPicker) {
             onError('Content Editor API is not available. Please make sure you are in the Jahia administration interface.');
+            console.error('CE_API not available:', window.CE_API);
             return;
         }
         
-        openImagePicker(async (selectedItems) => {
-            if (selectedItems && selectedItems.length > 0) {
-                const asset = selectedItems[0];
-                
-                try {
-                    // Get image URL
-                    let imageUrl = asset.url || asset.path || asset.downloadUrl;
-                    if (imageUrl.includes('/sites/')) {
-                        imageUrl = imageUrl.replace('/sites/', '/files/default/sites/');
-                    }
-                    
-                    // Fetch and convert to base64
-                    const response = await fetch(imageUrl, {
-                        credentials: 'include',
-                        headers: {'Accept': 'image/*'}
-                    });
-                    
-                    if (!response.ok) {
-                        throw new Error(`HTTP error! status: ${response.status}`);
-                    }
-                    
-                    const contentType = response.headers.get('content-type');
-                    if (contentType && !contentType.startsWith('image/')) {
-                        throw new Error(`Expected image but got ${contentType}`);
-                    }
-                    
-                    const blob = await response.blob();
-                    
-                    // Check file size limit (2.5 MB)
-                    const maxSizeBytes = 2.5 * 1024 * 1024;
-                    if (blob.size > maxSizeBytes) {
-                        const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
-                        throw new Error(`Image size (${sizeMB} MB) exceeds the maximum allowed size of 2.5 MB. Please select a smaller image.`);
-                    }
-                    
-                    // Determine mime type
-                    let mimeType = contentType || 'image/png';
-                    if (!mimeType.startsWith('image/')) {
-                        const fileName = asset.name || asset.displayName || '';
-                        const ext = fileName.toLowerCase().split('.').pop();
-                        const mimeMap = {
-                            'jpg': 'image/jpeg',
-                            'jpeg': 'image/jpeg',
-                            'png': 'image/png',
-                            'gif': 'image/gif',
-                            'webp': 'image/webp'
-                        };
-                        mimeType = mimeMap[ext] || 'image/png';
-                    }
-                    
-                    const imageBlob = new Blob([blob], {type: mimeType});
-                    
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                        const dataUrl = reader.result;
-                        const base64Only = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+        window.CE_API.openPicker({
+            type: 'image',
+            site: window.jahiaGWTParameters?.siteKey || 'digitall',
+            lang: window.jahiaGWTParameters?.uilang || 'en',
+            isMultiple: false,
+            setValue: async (selectedItems) => {
+                if (selectedItems && selectedItems.length > 0) {
+                    const asset = selectedItems[0];
+                    console.log('Selected asset:', asset);
+                    try {
+                        // Construct URL for default workspace to access unpublished content
+                        // Replace /sites/ with /files/default/ or use the path property
+                        let imageUrl = asset.url || asset.path || asset.downloadUrl;
                         
-                        setReferenceImages(prev => [...prev, {
-                            uuid: asset.uuid,
-                            name: asset.name || asset.displayName,
-                            url: asset.url,
-                            previewUrl: dataUrl,
-                            base64: base64Only,
-                            purpose: 'reference',
-                            strength: 0.5
-                        }]);
-                    };
-                    reader.readAsDataURL(imageBlob);
-                } catch (error) {
-                    console.error('Failed to load reference image:', error);
-                    onError('Failed to load reference image: ' + error.message);
+                        // If URL contains /sites/, replace with /files/default/ to access unpublished content
+                        if (imageUrl.includes('/sites/')) {
+                            imageUrl = imageUrl.replace('/sites/', '/files/default/sites/');
+                        }
+                        
+                        console.log('Fetching image from:', imageUrl);
+                        
+                        // Fetch the image with credentials to handle authentication
+                        const response = await fetch(imageUrl, {
+                            credentials: 'include',
+                            headers: {
+                                'Accept': 'image/*'
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                        
+                        const contentType = response.headers.get('content-type');
+                        console.log('Response content-type:', contentType);
+                        
+                        // Check if we actually got an image
+                        if (contentType && !contentType.startsWith('image/')) {
+                            throw new Error(`Expected image but got ${contentType}`);
+                        }
+                        
+                        const blob = await response.blob();
+                        
+                        // Check file size limit (2.5 MB)
+                        const maxSizeBytes = 2.5 * 1024 * 1024; // 2.5 MB
+                        if (blob.size > maxSizeBytes) {
+                            const sizeMB = (blob.size / (1024 * 1024)).toFixed(2);
+                            throw new Error(`Image size (${sizeMB} MB) exceeds the maximum allowed size of 2.5 MB. Please select a smaller image.`);
+                        }
+                        
+                        // Determine the image mime type from the file extension or content-type
+                        let mimeType = contentType || 'image/png';
+                        if (!mimeType.startsWith('image/')) {
+                            const fileName = asset.name || asset.displayName || '';
+                            if (fileName.toLowerCase().endsWith('.jpg') || fileName.toLowerCase().endsWith('.jpeg')) {
+                                mimeType = 'image/jpeg';
+                            } else if (fileName.toLowerCase().endsWith('.png')) {
+                                mimeType = 'image/png';
+                            } else if (fileName.toLowerCase().endsWith('.gif')) {
+                                mimeType = 'image/gif';
+                            } else if (fileName.toLowerCase().endsWith('.webp')) {
+                                mimeType = 'image/webp';
+                            } else {
+                                mimeType = 'image/png'; // default
+                            }
+                        }
+                        
+                        // Create a new blob with the correct mime type
+                        const imageBlob = new Blob([blob], { type: mimeType });
+                        
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                            // reader.result is the full data URL: "data:image/png;base64,iVBORw0KGgo..."
+                            const dataUrl = reader.result;
+                            console.log('Data URL mime type:', dataUrl.substring(0, 30));
+                            
+                            // Extract just the base64 part (after the comma) for API
+                            const base64Only = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
+                            
+                            setReferenceImages(prev => [...prev, {
+                                uuid: asset.uuid,
+                                name: asset.name || asset.displayName,
+                                url: asset.url,
+                                previewUrl: dataUrl,    // For display: full data URL
+                                base64: base64Only,     // For API: only base64 string
+                                purpose: 'reference',
+                                strength: 0.5
+                            }]);
+                        };
+                        reader.readAsDataURL(imageBlob);
+                    } catch (error) {
+                        console.error('Failed to load reference image:', error);
+                        onError('Failed to load reference image: ' + error.message);
+                    }
                 }
             }
-        }, false);
-    }, [onError]);
-    
-    const handleRemoveReferenceImage = useCallback((index) => {
+        });
+    };
+
+    const handleRemoveReferenceImage = (index) => {
         setReferenceImages(prev => prev.filter((_, idx) => idx !== index));
-    }, []);
-    
-    const handleUpdateReferenceImagePurpose = useCallback((index, purpose) => {
+    };
+
+    const handleUpdateReferenceImagePurpose = (index, purpose) => {
         setReferenceImages(prev => prev.map((ref, idx) => 
             idx === index ? {...ref, purpose} : ref
         ));
-    }, []);
-    
-    const handleUpdateReferenceImageStrength = useCallback((index, strength) => {
+    };
+
+    const handleUpdateReferenceImageStrength = (index, strength) => {
         setReferenceImages(prev => prev.map((ref, idx) => 
             idx === index ? {...ref, strength: parseFloat(strength)} : ref
         ));
-    }, []);
-    
-    // Computed values
-    const canGenerate = useMemo(() => {
-        return !generating && prompt.trim().length > 0;
-    }, [generating, prompt]);
-    
-    const canSave = useMemo(() => {
-        return !saving && selectedImages.length > 0;
-    }, [saving, selectedImages.length]);
-    
+    };
+
     return (
         <div className="generate-step">
             <div className="generate-step__header">
@@ -379,7 +474,7 @@ const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, on
                 <Button
                     icon={<Star />}
                     label={generating ? t('generate.generating') : t('generate.generateButton')}
-                    disabled={!canGenerate}
+                    disabled={generating || !prompt.trim()}
                     onClick={handleGenerate}
                 />
                 {generating && <Loader size="small" style={{marginLeft: '8px', display: 'inline-block'}}/>}
@@ -396,7 +491,7 @@ const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, on
                         {generatedUrls.map((url, idx) => (
                             <div key={idx} className="generate-step__image-card">
                                 <Checkbox
-                                    checked={isSelected(idx)}
+                                    checked={selectedImages.includes(idx)}
                                     className="generate-step__checkbox"
                                     onChange={() => handleImageToggle(idx)}
                                 />
@@ -444,7 +539,7 @@ const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, on
                         <div style={{marginTop: '16px'}}>
                             <Button
                                 label={saving ? t('generate.saving') : t('generate.saveButton', {count: selectedImages.length})}
-                                disabled={!canSave}
+                                disabled={saving || selectedImages.length === 0}
                                 onClick={handleSaveToDam}
                             />
                             {saving && <Loader size="small" style={{marginLeft: '8px', display: 'inline-block'}}/>}

@@ -22,10 +22,12 @@ const WizardNavigation = ({currentStep, steps, onStepClick, canProgress, selecte
                 const isCompleted = currentStep > step.id;
                 const isNextStep = step.id === currentStep + 1;
                 
-                // Special case: Allow jumping to Generate (step 2) from Style (step 0) if model is ready
-                const canJumpToGenerate = currentStep === 0 && step.id === 2 && selectedStyleStatus === 'ready';
+                // Step 3 (Generate) is only accessible when model status is READY
+                const isGenerateStep = step.id === 2;
+                const modelIsReady = selectedStyleStatus === 'ready';
+                const canAccessGenerate = isGenerateStep ? modelIsReady : true;
                 
-                const isClickable = step.id <= currentStep || (isNextStep && canProgress) || canJumpToGenerate;
+                const isClickable = canAccessGenerate && (step.id <= currentStep || (isNextStep && canProgress) || (isGenerateStep && modelIsReady));
                 
                 return (
                     <div

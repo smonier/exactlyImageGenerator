@@ -1,435 +1,144 @@
 /**
- * Step 2: Training
+ * Step 2: Training - Refactored
  *
  * - Select DAM assets for training
  * - Start training job
  * - Display training status
  */
 
-import React, {useState, useEffect} from 'react';
+import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
-import {Button, Typography, Input, Loader} from '@jahia/moonstone';
+import {Button, Typography} from '@jahia/moonstone';
 import {CloudUpload} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
-import {TRAIN_EXACTLY_STYLE, UPLOAD_TRAINING_IMAGES, GET_TRAINING_IMAGES, DELETE_TRAINING_IMAGE, GET_MODEL, GET_TRAINING_PROGRESS, PUT_MODEL_TO_DRAFT, CANCEL_TRAINING} from '../../graphql/operations';
+
+import {PUT_MODEL_TO_DRAFT, CANCEL_TRAINING, GET_MODEL, GET_TRAINING_PROGRESS} from '../../graphql/operations';
+import {
+    useTrainingProgress,
+    useTrainingImages,
+    useStartTraining,
+    useUploadTrainingImages,
+    useDeleteTrainingImage
+} from '../../hooks/useTraining';
+import {
+    openImagePicker,
+    filterNewAssets,
+    normalizeAsset
+} from '../../utils/pickerHelpers';
+import {isCEAPIAvailable, getDefaultWorkspaceURL} from '../../utils/jahiaHelpers';
+import {simulateProgress} from '../../utils/progressHelpers';
+import {formatImageDimensions} from '../../utils/imageHelpers';
+import {STATUS} from '../../utils/constants';
+import {extractModelStatus, extractTrainingProgress} from '../../utils/responseParser';
+import {isTraining as checkIfTraining, isTrainingComplete} from '../../utils/progressHelpers';
+
 import StatusBadge from './StatusBadge';
 import CircularProgress from './CircularProgress';
 import './TrainStep.css';
 
-// Get current site key from Jahia context
-const getSiteKey = () => {
-    return window.contextJsParameters?.siteKey || 'systemsite';
-};
-
 const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrainingStart, onError}) => {
     const {t} = useTranslation('exactlyImageGenerator');
-    const [damAssetInput, setDamAssetInput] = useState('');
-    const [damAssets, setDamAssets] = useState([]);
-    const [selectedAssets, setSelectedAssets] = useState([]); // Store full asset objects with paths
-    const [uploadProgress, setUploadProgress] = useState({}); // Track upload progress per image
-    const [imageDimensions, setImageDimensions] = useState({}); // Track image dimensions per asset
-    const [trainingStatus, setTrainingStatus] = useState(null);
+    
+    // Local state
+    const [selectedAssets, setSelectedAssets] = useState([]);
+    const [uploadProgress, setUploadProgress] = useState({});
+    const [imageDimensions, setImageDimensions] = useState({});
     const [uploading, setUploading] = useState(false);
-    const [existingImages, setExistingImages] = useState([]); // Images already uploaded to Exactly.ai
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [imageToDelete, setImageToDelete] = useState(null);
     
-    const siteKey = getSiteKey();
+    // Custom hooks for training operations
+    const {trainingStatus, setTrainingStatus, startPolling, fetchProgress} = useTrainingProgress(styleUuid);
+    const {images: existingImages, loading: loadingImages, refetch: refetchImages} = useTrainingImages(styleUuid);
     
-    // Fetch existing training images
-    const [fetchImages, {loading: loadingImages}] = useMutation(GET_TRAINING_IMAGES, {
-        onCompleted: data => {
-            if (data?.exactly?.getTrainingImages) {
-                const response = data.exactly.getTrainingImages;
-                if (response.successful && response.message) {
-                    try {
-                        const parsedImages = JSON.parse(response.message);
-                        setExistingImages(parsedImages);
-                    } catch (e) {
-                        console.error('Failed to parse images JSON:', e);
-                        setExistingImages([]);
-                    }
-                }
-            }
-        },
-        onError: error => {
-            console.error('Error fetching training images:', error);
-        }
-    });
-    
-    // Get model details mutation
+    // Initialize training state
     const [getModel] = useMutation(GET_MODEL);
     
-    // Get training progress mutation
-    const [getProgress] = useMutation(GET_TRAINING_PROGRESS, {
-        onCompleted: data => {
-            if (data?.exactly?.getTrainingProgress?.successful) {
-                try {
-                    const progress = JSON.parse(data.exactly.getTrainingProgress.message);
-                    setTrainingStatus(prev => ({
-                        ...(prev || {}),
-                        status: progress.status || (prev?.status) || 'training',
-                        progress: progress.progress !== undefined ? progress.progress : (prev?.progress || 0),
-                        message: progress.progress === 100 ? 'Training complete' : 'Training in progress'
-                    }));
-                    
-                    // If status changed to training, reload images
-                    if (progress.status === 'training') {
-                        fetchImages({
-                            variables: {
-                                styleUuid: styleUuid
-                            }
-                        });
-                    }
-                    
-                    // Stop polling when progress reaches 100% or if failed
-                    if (progress.progress >= 100 || progress.status === 'completed' || progress.status === 'failed') {
-                        stopProgressPolling();
-                        // Reload images when training completes
-                        fetchImages({
-                            variables: {
-                                styleUuid: styleUuid
-                            }
-                        });
-                    }
-                } catch (e) {
-                    console.error('Failed to parse progress:', e);
-                }
-            }
-        }
-    });
-
-    const progressIntervalRef = React.useRef(null);
-
-    const startProgressPolling = () => {
-        // Poll every 5 seconds
-        progressIntervalRef.current = setInterval(() => {
-            getProgress({
-                variables: {
-                    styleUuid: styleUuid
-                }
-            });
-        }, 5000);
-    };
-
-    const stopProgressPolling = () => {
-        if (progressIntervalRef.current) {
-            clearInterval(progressIntervalRef.current);
-            progressIntervalRef.current = null;
-        }
-    };
-
-    // Cleanup on unmount
     useEffect(() => {
-        return () => stopProgressPolling();
-    }, []);
-    
-    // Fetch model details, then progress if training, then images
-    useEffect(() => {
-        if (styleUuid) {
-            // Step 1: Fetch model details from /public/v1/models/{uid}/
-            getModel({
-                variables: {
-                    styleUuid: styleUuid
-                }
-            }).then(modelResult => {
-                if (modelResult?.data?.exactly?.getModel?.successful) {
-                    try {
-                        const model = JSON.parse(modelResult.data.exactly.getModel.message);
-                        const modelStatus = model.status;
-                        
-                        // Step 2: If training, get progress from /public/v1/models/{uid}/train/progress/
-                        if (modelStatus === 'training') {
-                            return getProgress({
-                                variables: {
-                                    styleUuid: styleUuid
-                                }
-                            }).then(progressResult => {
-                                if (progressResult?.data?.exactly?.getTrainingProgress?.successful) {
-                                    try {
-                                        const progress = JSON.parse(progressResult.data.exactly.getTrainingProgress.message);
-                                        setTrainingStatus({
-                                            status: progress.status || modelStatus,
-                                            progress: progress.progress || 0,
-                                            message: 'Training in progress'
-                                        });
-                                        // Start polling if training and not complete
-                                        if (progress.progress < 100) {
-                                            startProgressPolling();
-                                        }
-                                    } catch (e) {
-                                        console.error('Failed to parse progress:', e);
-                                        setTrainingStatus({
-                                            status: modelStatus,
-                                            progress: 0,
-                                            message: 'Training in progress'
-                                        });
-                                    }
-                                }
-                                return Promise.resolve();
-                            });
-                        } else {
-                            // Not training, just set status from model
-                            setTrainingStatus({
-                                status: modelStatus,
-                                progress: modelStatus === 'ready' ? 100 : 0
-                            });
-                            return Promise.resolve();
+        if (!styleUuid) return;
+        
+        // Step 1: Fetch model details
+        getModel({variables: {styleUuid}})
+            .then(modelResult => {
+                const modelStatus = extractModelStatus(modelResult.data);
+                
+                if (modelStatus && checkIfTraining(modelStatus.status)) {
+                    // Step 2: If training, get progress
+                    return fetchProgress().then(progressResult => {
+                        const progress = extractTrainingProgress(progressResult.data);
+                        if (progress) {
+                            setTrainingStatus(progress);
+                            if (!isTrainingComplete(progress.progress)) {
+                                startPolling();
+                            }
                         }
-                    } catch (e) {
-                        console.error('Failed to parse model details:', e);
-                        return Promise.resolve();
-                    }
+                    });
+                } else if (modelStatus) {
+                    // Not training, just set status
+                    setTrainingStatus({
+                        status: modelStatus.status,
+                        progress: modelStatus.status === 'ready' ? 100 : 0
+                    });
                 }
                 return Promise.resolve();
-            }).then(() => {
-                // Step 3: Finally fetch images from Exactly
-                fetchImages({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
-            }).catch(error => {
+            })
+            .then(() => {
+                // Step 3: Fetch images
+                refetchImages();
+            })
+            .catch(error => {
                 console.error('Error in initialization flow:', error);
-                // Still try to fetch images even if earlier steps fail
-                fetchImages({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
+                refetchImages(); // Try to fetch images anyway
             });
-        }
-    }, [styleUuid, styleStatus]);
-
-    // Watch for status changes and start/stop polling accordingly
-    useEffect(() => {
-        if (trainingStatus?.status === 'training') {
-            // Start polling if not already polling
-            if (!progressIntervalRef.current) {
-                startProgressPolling();
-            }
-        } else {
-            // Stop polling if training is complete or not training
-            stopProgressPolling();
-        }
-    }, [trainingStatus?.status]);
-
-    const [trainStyle, {loading: training}] = useMutation(TRAIN_EXACTLY_STYLE, {
-        onCompleted: data => {
-            if (data?.exactly?.trainStyle?.successful) {
-                const response = data.exactly.trainStyle;
-                try {
-                    const result = JSON.parse(response.message);
-                    setTrainingStatus({
-                        jobId: result.jobId,
-                        status: 'training',
-                        progress: 0,
-                        message: 'Training started'
-                    });
-                    // Immediately fetch the actual status from the API
-                    getProgress({
-                        variables: {
-                            styleUuid: styleUuid
-                        }
-                    });
-                    // Start polling for progress
-                    startProgressPolling();
-                } catch (e) {
-                    console.error('Failed to parse training result:', e);
-                    setTrainingStatus({
-                        status: 'training',
-                        progress: 0,
-                        message: response.message
-                    });
-                    // Still fetch progress and start polling
-                    getProgress({
-                        variables: {
-                            styleUuid: styleUuid
-                        }
-                    });
-                    startProgressPolling();
-                }
-            } else {
-                // Handle error response from backend
-                const errorMsg = data?.exactly?.trainStyle?.message || 'Training failed';
-                setTrainingStatus({
-                    status: 'failed',
-                    message: errorMsg
-                });
-                onError(errorMsg);
-            }
-        },
-        onError: error => {
-            console.error('Training error:', error);
-            const errorMsg = error.message || t('errors.trainingFailed');
+    }, [styleUuid, styleStatus, getModel, fetchProgress, setTrainingStatus, startPolling, refetchImages]);
+    
+    // Training operations
+    const {startTraining, loading: training} = useStartTraining(
+        styleUuid,
+        () => {
+            // On success, set training status and start polling
             setTrainingStatus({
-                status: 'failed',
-                message: errorMsg
+                status: STATUS.TRAINING,
+                progress: 0,
+                message: 'Training started'
             });
-            onError(errorMsg);
-        }
-    });
-
-    const [uploadImages] = useMutation(UPLOAD_TRAINING_IMAGES, {
-        onCompleted: data => {
-            if (data?.exactly?.uploadTrainingImages?.successful) {
-                setUploading(false);
-                // Refetch existing images
-                fetchImages({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
-            }
+            fetchProgress();
+            startPolling();
+            if (onTrainingStart) onTrainingStart();
+            refetchImages();
         },
-        onError: error => {
-            console.error('Upload error:', error);
+        onError
+    );
+    
+    // Upload operations with progress simulation
+    const uploadImagesHook = useUploadTrainingImages(
+        styleUuid,
+        () => {
+            setUploading(false);
+            setUploadProgress({});
+            setSelectedAssets([]);
+            refetchImages(); // Refresh image list from Exactly.ai
+        },
+        (error) => {
             setUploading(false);
             onError(t('errors.uploadFailed', {message: error.message}));
         }
-    });
-
-    const [deleteImage] = useMutation(DELETE_TRAINING_IMAGE, {
-        onCompleted: data => {
-            if (data?.exactly?.deleteTrainingImage?.successful) {
-                // Refetch existing images
-                fetchImages({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
-            }
-        },
-        onError: error => {
-            console.error('Delete error:', error);
-            onError(t('errors.deleteFailed', {message: error.message}));
-        }
-    });
-
-    const handleDeleteImage = (imageUid) => {
-        setImageToDelete(imageUid);
-        setDeleteDialogOpen(true);
-    };
-
-    const confirmDeleteImage = () => {
-        if (imageToDelete) {
-            deleteTrainingImage({
-                variables: {
-                    styleUuid: styleUuid,
-                    imageUid: imageToDelete
-                }
-            });
-        }
-        setDeleteDialogOpen(false);
-        setImageToDelete(null);
-    };
-
-    const handleOpenMediaPicker = () => {
-        window.CE_API.openPicker({
-            type: 'image',
-            site: window.jahiaGWTParameters?.siteKey || 'digitall',
-            lang: window.jahiaGWTParameters?.uilang || 'en',
-            isMultiple: true,
-            setValue: (selectedItems) => {
-                if (selectedItems && selectedItems.length > 0) {
-                    const newAssets = selectedItems.filter(
-                        item => item.uuid && !damAssets.includes(item.uuid)
-                    );
-                    
-                    if (newAssets.length > 0) {
-                        const newUuids = newAssets.map(item => item.uuid);
-                        setDamAssets([...damAssets, ...newUuids]);
-                        setSelectedAssets([...selectedAssets, ...newAssets]);
-                    }
-                }
-            }
-        });
-    };
-
-    const handleAddAsset = () => {
-        const uuid = damAssetInput.trim();
-        if (uuid && !damAssets.includes(uuid)) {
-            setDamAssets([...damAssets, uuid]);
-            setDamAssetInput('');
-        }
-    };
-
-    const handleRemoveAsset = uuid => {
-        setDamAssets(damAssets.filter(id => id !== uuid));
-        setSelectedAssets(selectedAssets.filter(asset => asset.uuid !== uuid));
-    };
-
-    const handleUploadToExactly = () => {
-        if (damAssets.length === 0) {
-            onError(t('errors.noTrainingAssets'));
-            return;
-        }
-
-        const siteKey = getSiteKey();
-        setUploading(true);
-        
-        // Initialize progress for all images
-        const initialProgress = {};
-        damAssets.forEach(uuid => {
-            initialProgress[uuid] = 0;
-        });
-        setUploadProgress(initialProgress);
-        
-        // Simulate progress (since GraphQL doesn't support real-time progress)
-        // Start at 10% immediately, then increment
-        damAssets.forEach(uuid => {
-            initialProgress[uuid] = 10;
-        });
-        setUploadProgress({...initialProgress});
-        
-        const progressInterval = setInterval(() => {
-            setUploadProgress(prev => {
-                const updated = {};
-                Object.keys(prev).forEach(uuid => {
-                    // Increment by 10% until 90%
-                    updated[uuid] = Math.min(prev[uuid] + 10, 90);
-                });
-                return updated;
-            });
-        }, 500);
-        
-        uploadImages({
-            variables: {
-                styleUuid: styleUuid,
-                damAssetUuids: damAssets
-            }
-        }).then(() => {
-            clearInterval(progressInterval);
-            // Set all to 100% on completion
-            const completedProgress = {};
-            damAssets.forEach(uuid => {
-                completedProgress[uuid] = 100;
-            });
-            setUploadProgress(completedProgress);
-        }).catch(() => {
-            clearInterval(progressInterval);
-        });
-    };
-
-    const handleStartTraining = () => {
-        trainStyle({
-            variables: {
-                styleUuid: styleUuid
-            }
-        });
-    };
-
+    );
+    
+    // Delete operations
+    const {deleteTrainingImage} = useDeleteTrainingImage(
+        styleUuid,
+        () => refetchImages(), // Refresh image list after delete
+        (error) => onError(t('errors.deleteFailed', {message: error.message}))
+    );
+    
+    // Draft and cancel mutations
     const [putToDraft] = useMutation(PUT_MODEL_TO_DRAFT, {
         onCompleted: data => {
             if (data?.exactly?.putModelToDraft?.successful) {
-                // Clear training status and refetch progress
                 setTrainingStatus(null);
-                getProgress({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
+                refetchImages();
             } else {
                 const errorMsg = data?.exactly?.putModelToDraft?.message || 'Failed to put model to draft';
                 onError(errorMsg);
@@ -440,30 +149,16 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
             onError(error.message || 'Failed to put model to draft');
         }
     });
-
-    const handlePutToDraft = () => {
-        putToDraft({
-            variables: {
-                styleUuid: styleUuid
-            }
-        });
-    };
-
+    
     const [cancelTrain] = useMutation(CANCEL_TRAINING, {
         onCompleted: data => {
             if (data?.exactly?.cancelTraining?.successful) {
-                stopProgressPolling();
                 setTrainingStatus(prev => ({
                     ...prev,
                     status: 'canceled',
                     message: 'Training canceled'
                 }));
-                // Refetch progress to get updated status
-                getProgress({
-                    variables: {
-                        styleUuid: styleUuid
-                    }
-                });
+                refetchImages();
             } else {
                 const errorMsg = data?.exactly?.cancelTraining?.message || 'Failed to cancel training';
                 onError(errorMsg);
@@ -474,15 +169,113 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
             onError(error.message || 'Failed to cancel training');
         }
     });
-
-    const handleCancelTraining = () => {
-        cancelTrain({
-            variables: {
-                styleUuid: styleUuid
+    
+    // Handlers
+    const handleOpenMediaPicker = useCallback(() => {
+        if (!isCEAPIAvailable()) {
+            onError('Content Editor API is not available');
+            return;
+        }
+        
+        openImagePicker((selectedItems) => {
+            const currentUuids = selectedAssets.map(a => a.uuid);
+            const newAssets = filterNewAssets(selectedItems, currentUuids)
+                .map(normalizeAsset);
+            
+            if (newAssets.length > 0) {
+                setSelectedAssets(prev => [...prev, ...newAssets]);
             }
-        });
-    };
-
+        }, true);
+    }, [selectedAssets, onError]);
+    
+    const handleRemoveAsset = useCallback((uuid) => {
+        setSelectedAssets(prev => prev.filter(asset => asset.uuid !== uuid));
+    }, []);
+    
+    const handleUploadToExactly = useCallback(() => {
+        if (selectedAssets.length === 0) {
+            onError(t('errors.noTrainingAssets'));
+            return;
+        }
+        
+        setUploading(true);
+        
+        // Simulate progress
+        const progressController = simulateProgress(
+            selectedAssets,
+            setUploadProgress,
+            null
+        );
+        
+        // Perform actual upload
+        const assetUuids = selectedAssets.map(a => a.uuid);
+        uploadImagesHook.upload(assetUuids)
+            .then(() => {
+                progressController.complete();
+            })
+            .catch(() => {
+                progressController.stop();
+                setUploading(false);
+            });
+    }, [selectedAssets, uploadImagesHook, onError, t]);
+    
+    const handleStartTraining = useCallback(() => {
+        startTraining();
+    }, [startTraining]);
+    
+    const handlePutToDraft = useCallback(() => {
+        putToDraft({variables: {styleUuid}});
+    }, [putToDraft, styleUuid]);
+    
+    const handleCancelTraining = useCallback(() => {
+        cancelTrain({variables: {styleUuid}});
+    }, [cancelTrain, styleUuid]);
+    
+    const handleDeleteImage = useCallback((imageUid) => {
+        setImageToDelete(imageUid);
+        setDeleteDialogOpen(true);
+    }, []);
+    
+    const confirmDeleteImage = useCallback(() => {
+        if (imageToDelete) {
+            deleteTrainingImage(imageToDelete);
+        }
+        setDeleteDialogOpen(false);
+        setImageToDelete(null);
+    }, [imageToDelete, deleteTrainingImage]);
+    
+    const handleImageLoad = useCallback((e, assetUuid) => {
+        const img = e.target;
+        setImageDimensions(prev => ({
+            ...prev,
+            [assetUuid]: {
+                width: img.naturalWidth,
+                height: img.naturalHeight
+            }
+        }));
+    }, []);
+    
+    // Computed values
+    const isTrainingOrReady = useMemo(() => {
+        return styleStatus === STATUS.TRAINING || styleStatus === STATUS.READY;
+    }, [styleStatus]);
+    
+    const shouldShowSizeRequirement = useMemo(() => {
+        return selectedAssets.length > 0 && 
+               !isTrainingOrReady && 
+               !uploading;
+    }, [selectedAssets.length, isTrainingOrReady, uploading]);
+    
+    const canUpload = useMemo(() => {
+        return !uploading && 
+               selectedAssets.length > 0 && 
+               !isTrainingOrReady;
+    }, [uploading, selectedAssets.length, isTrainingOrReady]);
+    
+    const canStartTraining = useMemo(() => {
+        return !training && existingImages.length > 0;
+    }, [training, existingImages.length]);
+    
     return (
         <div className="train-step">
             {/* Status Badge - Top Right */}
@@ -578,32 +371,23 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                         label={t('train.openMediaPicker')}
                         color="accent"
                         onClick={handleOpenMediaPicker}
-                        disabled={styleStatus === 'training' || styleStatus === 'ready'}
+                        disabled={isTrainingOrReady}
                     />
                 </div>
 
-                {damAssets.length > 0 && (
+                {selectedAssets.length > 0 && (
                     <div className="train-step__asset-list">
                         <Typography variant="body">
-                            {t('train.selectedAssets', {count: damAssets.length})}
+                            {t('train.selectedAssets', {count: selectedAssets.length})}
                         </Typography>
                         <div className="train-step__thumbnails">
                             {selectedAssets.map(asset => (
                                 <div key={asset.uuid} className="train-step__thumbnail">
                                     <img 
-                                        src={`/files/default${asset.path}`} 
-                                        alt={asset.name || asset.displayName}
+                                        src={getDefaultWorkspaceURL(asset.path)} 
+                                        alt={asset.name}
                                         className="train-step__thumbnail-img"
-                                        onLoad={(e) => {
-                                            const img = e.target;
-                                            setImageDimensions(prev => ({
-                                                ...prev,
-                                                [asset.uuid]: {
-                                                    width: img.naturalWidth,
-                                                    height: img.naturalHeight
-                                                }
-                                            }));
-                                        }}
+                                        onLoad={(e) => handleImageLoad(e, asset.uuid)}
                                     />
                                     <Button
                                         variant="ghost"
@@ -621,10 +405,13 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                                         </div>
                                     )}
                                     <div className="train-step__thumbnail-label">
-                                        {asset.name || asset.displayName}
+                                        {asset.name}
                                         {imageDimensions[asset.uuid] && (
-                                            <div style={{fontSize: '11px', color: '#cfcfcf', marginTop: '2px'}}>
-                                                {imageDimensions[asset.uuid].width} × {imageDimensions[asset.uuid].height}px
+                                            <div style={{fontSize: '11px', color: '#666', marginTop: '2px'}}>
+                                                {formatImageDimensions(
+                                                    imageDimensions[asset.uuid].width,
+                                                    imageDimensions[asset.uuid].height
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -633,7 +420,8 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                         </div>
                     </div>
                 )}
-                {selectedAssets.length > 0 && styleStatus !== 'training' && styleStatus !== 'ready' && !uploading && (
+                
+                {shouldShowSizeRequirement && (
                     <>
                         <Typography variant="caption" style={{fontStyle: 'italic', marginBottom: '12px', display: 'block'}}>
                             {t('train.imageSizeRequirement')}
@@ -645,24 +433,23 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
 
             {/* Training Action */}
             <div className="train-step__actions">
-
                 <Button
                     label={uploading ? t('train.uploading') : t('train.uploadButton')}
                     icon={<CloudUpload />}
                     color="accent"
                     variant="outlined"
-                    disabled={uploading || selectedAssets.length === 0 || styleStatus === 'training' || styleStatus === 'ready'}
+                    disabled={!canUpload}
                     onClick={handleUploadToExactly}
                 />
                 
                 {/* Show different buttons based on model status */}
-                {trainingStatus?.status === 'ready' ? (
+                {trainingStatus?.status === STATUS.READY ? (
                     <Button
                         label={t('train.putToDraft')}
                         color="default"
                         onClick={handlePutToDraft}
                     />
-                ) : trainingStatus?.status === 'training' ? (
+                ) : trainingStatus?.status === STATUS.TRAINING ? (
                     <Button
                         label={t('train.cancelTraining')}
                         color="danger"
@@ -671,14 +458,14 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                 ) : (
                     <Button
                         label={training ? t('train.training') : t('train.startButton')}
-                        disabled={training || existingImages.length === 0}
+                        disabled={!canStartTraining}
                         onClick={handleStartTraining}
                     />
                 )}
             </div>
 
             {/* Training Status - Show when training */}
-            {trainingStatus && trainingStatus.status === 'training' && (
+            {trainingStatus && trainingStatus.status === STATUS.TRAINING && (
                 <div className="train-step__status">
                     <Typography variant="subheading">{t('train.statusTitle')}</Typography>
                     <div className="train-step__status-content">
@@ -718,8 +505,6 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                     </div>
                 </div>
             )}
-
-
         </div>
     );
 };

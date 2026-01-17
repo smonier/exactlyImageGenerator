@@ -212,8 +212,9 @@ The UI provides a guided workflow with three main steps:
 
 - **Clickable Step Cards**: Jump directly to any completed step
 - **Visual Feedback**: Active step highlighted, completed steps marked with checkmark
-- **Blocked Navigation**: Cannot proceed to Generate step while model is training
+- **Protected Step 3**: Generate step only accessible when model status is READY
 - **Status Indicators**: Color-coded badges show model status throughout workflow
+- **Auto-Refresh**: Image lists automatically refresh after upload/delete operations
 
 ---
 
@@ -422,6 +423,29 @@ logger.info("Exactly API token configured (length: {})", token.length());
 
 ## Development
 
+### Code Architecture (2026 Refactoring)
+
+The React UI has been refactored with a clean, modular architecture:
+
+**utils/** - Pure utility functions
+- `constants.js` - Centralized constants (STEPS, STATUS, ASPECT_RATIOS, etc.)
+- `jahiaHelpers.js` - Jahia integration utilities
+- `imageHelpers.js` - Image processing and validation
+- `responseParser.js` - Safe API response parsing
+- `pickerHelpers.js` - Content picker integration
+- `progressHelpers.js` - Progress tracking and simulation
+
+**hooks/** - Custom React hooks
+- `useTraining.js` - Training operations (upload, delete, start, progress polling)
+- `useGeneration.js` - Generation operations (generate, save to DAM, selection)
+
+**components/** - React components
+- Refactored to use custom hooks and utilities
+- Performance optimized with useCallback/useMemo
+- Reduced component size by ~30% (TrainStep: 728→513 lines)
+
+See `REFACTORING_INDEX.md` for complete documentation.
+
 ### Project Structure
 
 ```
@@ -446,9 +470,31 @@ exactlyImageGenerator/
 │   │               └── org.jahia.se.modules.exactlyImageGenerator.cfg
 │   └── javascript/
 │       ├── AdminPanel/                     # React UI
-│       │   └── AdminPanel.jsx
-│       └── graphql/
-│           └── operations.js               # GraphQL operations
+│       │   ├── components/                 # React components
+│       │   │   ├── ExactlyImageGeneratorApp.jsx   # Main wizard
+│       │   │   ├── StyleStep.jsx           # Step 1: Style selection
+│       │   │   ├── TrainStep.jsx           # Step 2: Training
+│       │   │   ├── GenerateStep.jsx        # Step 3: Generation
+│       │   │   ├── WizardNavigation.jsx    # Wizard nav
+│       │   │   ├── StatusBadge.jsx         # Status indicators
+│       │   │   ├── CircularProgress.jsx    # Progress indicator
+│       │   │   └── ErrorBanner.jsx         # Error display
+│       │   └── AdminPanel.jsx              # Panel registration
+│       ├── api/
+│       │   └── exactlyApi.js               # REST API client
+│       ├── graphql/
+│       │   ├── apolloClient.js             # Apollo setup
+│       │   └── operations.js               # GraphQL operations
+│       ├── hooks/                          # Custom React hooks
+│       │   ├── useTraining.js              # Training operations
+│       │   └── useGeneration.js            # Generation operations
+│       └── utils/                          # Utility functions
+│           ├── constants.js                # App constants
+│           ├── jahiaHelpers.js             # Jahia integration
+│           ├── imageHelpers.js             # Image processing
+│           ├── responseParser.js           # API response parsing
+│           ├── pickerHelpers.js            # Content picker
+│           └── progressHelpers.js          # Progress tracking
 └── target/                                 # Build output
 ```
 
@@ -629,6 +675,16 @@ Recent additions:
 - [x] Model status synchronization
 - [x] Training cancellation support
 - [x] Put model to draft functionality
+- [x] Complete code refactoring with utils and custom hooks
+- [x] Auto-refresh image lists after upload/delete
+- [x] Step 3 access restricted to READY models only
+
+Code Quality Improvements (2026):
+- [x] Modular architecture with utils/ and hooks/ separation
+- [x] Custom React hooks (useTraining, useGeneration)
+- [x] Performance optimization (useCallback, useMemo)
+- [x] Centralized constants and helpers
+- [x] Comprehensive code documentation (see REFACTORING_*.md files)
 
 Future enhancements:
 - [ ] Batch image generation
