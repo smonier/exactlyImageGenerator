@@ -20,7 +20,7 @@ A complete Jahia OSGi module for integrating Exactly.ai image generation capabil
 ✅ **JCR Persistence** - Store styles and projects with full metadata  
 ✅ **GraphQL-First Design** - Complete GraphQL API for all operations  
 ✅ **React UI** - Three-step wizard interface with visual feedback  
-✅ **Jahia Medi Manager Integration** - Direct integration with Jahia Media Manager for training and saving images  
+✅ **Jahia Media Manager Integration** - Direct integration with Jahia Media Manager for training and saving images  
 ✅ **Streaming Support** - Efficient handling of image uploads/downloads  
 ✅ **OSGi Configuration** - External configuration for API credentials  
 ✅ **Real-Time Training Progress** - Live polling of training status with circular progress indicator  

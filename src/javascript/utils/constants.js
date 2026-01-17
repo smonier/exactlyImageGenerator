@@ -35,11 +35,12 @@ export const STATUS = {
     TRAINING: 'training',
     READY: 'ready',
     FAILED: 'failed',
+    DELETED: 'deleted',
     UNKNOWN: 'unknown'
 };
 
 // Image size requirements
 export const IMAGE_REQUIREMENTS = {
     MIN_SIZE: 1024,
-    MIN_TRAINING_IMAGES: 1
+    MIN_TRAINING_IMAGES: 10
 };

@@ -9,7 +9,7 @@
 import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
-import {Button, Typography} from '@jahia/moonstone';
+import {Button, Typography, Loader} from '@jahia/moonstone';
 import {CloudUpload} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 
@@ -441,7 +441,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                     disabled={!canUpload}
                     onClick={handleUploadToExactly}
                 />
-                
+                {uploading && <Loader size="small" style={{display: 'inline-block'}}/>}
                 {/* Show different buttons based on model status */}
                 {trainingStatus?.status === STATUS.READY ? (
                     <Button
