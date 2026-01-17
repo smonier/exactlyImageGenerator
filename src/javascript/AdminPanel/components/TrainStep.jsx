@@ -28,6 +28,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
     const [damAssets, setDamAssets] = useState([]);
     const [selectedAssets, setSelectedAssets] = useState([]); // Store full asset objects with paths
     const [uploadProgress, setUploadProgress] = useState({}); // Track upload progress per image
+    const [imageDimensions, setImageDimensions] = useState({}); // Track image dimensions per asset
     const [trainingStatus, setTrainingStatus] = useState(null);
     const [uploading, setUploading] = useState(false);
     const [existingImages, setExistingImages] = useState([]); // Images already uploaded to Exactly.ai
@@ -593,6 +594,16 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                                         src={`/files/default${asset.path}`} 
                                         alt={asset.name || asset.displayName}
                                         className="train-step__thumbnail-img"
+                                        onLoad={(e) => {
+                                            const img = e.target;
+                                            setImageDimensions(prev => ({
+                                                ...prev,
+                                                [asset.uuid]: {
+                                                    width: img.naturalWidth,
+                                                    height: img.naturalHeight
+                                                }
+                                            }));
+                                        }}
                                     />
                                     <Button
                                         variant="ghost"
@@ -609,18 +620,32 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                                             />
                                         </div>
                                     )}
+                                    <div className="train-step__thumbnail-label">
+                                        {asset.name || asset.displayName}
+                                        {imageDimensions[asset.uuid] && (
+                                            <div style={{fontSize: '11px', color: '#cfcfcf', marginTop: '2px'}}>
+                                                {imageDimensions[asset.uuid].width} × {imageDimensions[asset.uuid].height}px
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     </div>
                 )}
+                {selectedAssets.length > 0 && styleStatus !== 'training' && styleStatus !== 'ready' && !uploading && (
+                    <>
+                        <Typography variant="caption" style={{fontStyle: 'italic', marginBottom: '12px', display: 'block'}}>
+                            {t('train.imageSizeRequirement')}
+                        </Typography>
+                        <br/>
+                    </>
+                )}
             </div>
 
             {/* Training Action */}
             <div className="train-step__actions">
-                <Typography variant="caption" style={{fontStyle: 'italic', marginBottom: '12px', display: 'block'}}>
-                    {t('train.imageSizeRequirement')}
-                </Typography>
+
                 <Button
                     label={uploading ? t('train.uploading') : t('train.uploadButton')}
                     icon={<CloudUpload />}
@@ -694,7 +719,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                 </div>
             )}
 
-            
+
         </div>
     );
 };
