@@ -10,7 +10,7 @@ import React, {useState, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation, useQuery} from '@apollo/client';
 import {Button, Typography, Loader, Input} from '@jahia/moonstone';
-import {Delete, Reload} from '@jahia/moonstone/dist/icons';
+import {Delete, Reload, AddCircle} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 import {SYNC_EXACTLY_STYLES, CREATE_EXACTLY_STYLE, DELETE_EXACTLY_STYLE, GET_STYLES, GET_TRAINING_PROGRESS} from '../../graphql/operations';
 import StatusBadge from './StatusBadge';
@@ -239,6 +239,7 @@ const StyleStep = ({selectedStyleUuid, selectedStyleName, onStyleSelect, onError
                 <Button
                     label={t('style.createButton')}
                     color="accent"
+                    icon={<AddCircle/>}
                     variant="outlined"
                     onClick={() => setShowCreateForm(!showCreateForm)}
                     disabled={creating}

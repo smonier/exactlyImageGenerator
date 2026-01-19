@@ -10,7 +10,7 @@
 import React, {useState, useCallback, useMemo} from 'react';
 import {useTranslation} from 'react-i18next';
 import {Button, Typography, Input, Loader, Checkbox} from '@jahia/moonstone';
-import {Star} from '@jahia/moonstone/dist/icons';
+import {Delete, Star} from '@jahia/moonstone/dist/icons';
 
 import {
     useGenerateImages,
@@ -293,12 +293,13 @@ const GenerateStep = ({styleUuid, styleName, styleDescription, generatedUrls, on
                                     </Typography>
                                     <Button
                                         label={t('generate.removeReferenceImage')}
-                                        size="compact"
+                                        icon={<Delete/>}
+                                        color="danger"
+                                        size="default"
                                         variant="ghost"
                                         onClick={() => handleRemoveReferenceImage(index)}
                                     />
                                 </div>
-                                
                                 <div style={{marginBottom: '8px'}}>
                                     <Typography variant="caption">{ref.name}</Typography>
                                     {(ref.previewUrl || ref.url) && (

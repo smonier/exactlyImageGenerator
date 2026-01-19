@@ -10,7 +10,7 @@ import React, {useState, useCallback, useMemo, useEffect} from 'react';
 import {useTranslation} from 'react-i18next';
 import {useMutation} from '@apollo/client';
 import {Button, Typography, Loader} from '@jahia/moonstone';
-import {CloudUpload} from '@jahia/moonstone/dist/icons';
+import {CloudUpload, EditImage, MultipleListSelector, Check} from '@jahia/moonstone/dist/icons';
 import {Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle} from '@material-ui/core';
 
 import {PUT_MODEL_TO_DRAFT, CANCEL_TRAINING, GET_MODEL, GET_TRAINING_PROGRESS} from '../../graphql/operations';
@@ -369,6 +369,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                 <div className="train-step__asset-input">
                     <Button
                         label={t('train.openMediaPicker')}
+                        icon={<MultipleListSelector />}
                         color="accent"
                         onClick={handleOpenMediaPicker}
                         disabled={isTrainingOrReady}
@@ -446,6 +447,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                 {trainingStatus?.status === STATUS.READY ? (
                     <Button
                         label={t('train.putToDraft')}
+                        icon={<EditImage />}
                         color="default"
                         onClick={handlePutToDraft}
                     />
@@ -458,6 +460,7 @@ const TrainStep = ({styleUuid, styleName, styleStatus, styleDescription, onTrain
                 ) : (
                     <Button
                         label={training ? t('train.training') : t('train.startButton')}
+                        icon={training ? '' : <Check/>}
                         disabled={!canStartTraining}
                         onClick={handleStartTraining}
                     />
