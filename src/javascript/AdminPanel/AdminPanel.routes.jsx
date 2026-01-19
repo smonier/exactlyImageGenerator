@@ -11,6 +11,7 @@ export const registerRoutes = () => {
         path: `${constants.DEFAULT_ROUTE}*`, // Catch everything and let the app handle routing logic
         defaultPath: constants.DEFAULT_ROUTE,
         isSelectable: true,
+        requireModuleInstalledOnSite: 'exactlyImageGenerator',
         render: v => <Suspense fallback="loading ..."><AdminPanel match={v.match}/></Suspense>
     });
 

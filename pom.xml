@@ -127,7 +127,6 @@
                 <extensions>true</extensions>
                 <configuration>
                     <instructions>
-                        <Jahia-Module-Type>system</Jahia-Module-Type>
                         <_dsannotations>*</_dsannotations>
                         <Embed-Dependency>json</Embed-Dependency>
                         <Import-Package>!org.json.*,*</Import-Package>
