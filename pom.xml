@@ -34,7 +34,7 @@
     <groupId>org.jahia.se.modules</groupId>
     <artifactId>exactlyImageGenerator</artifactId>
     <name>Exactly.ai Image Generator</name>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <packaging>bundle</packaging>
     <description>This is the custom ReactJS module (Exactly.ai Image Generator) for running on a Jahia server.</description>
 
@@ -42,7 +42,7 @@
         <connection>scm:git:git@github.com:smonier/exactlyImageGenerator.git</connection>
         <developerConnection>scm:git:git@github.com:smonier/exactlyImageGenerator.git</developerConnection>
         <url>https://github.com/smonier/exactlyImageGenerator.git</url>
-        <tag>HEAD</tag>
+        <tag>exactlyImageGenerator-1.0.0</tag>
     </scm>
 
     <properties>
