@@ -217,8 +217,4 @@
         </profile>
     </profiles>
 
-
-  <scm>
-    <tag>exactlyImageGenerator-1.0.0</tag>
-  </scm>
 </project>
