@@ -79,6 +79,11 @@ public class ExactlyProxyClient {
      * Follows redirects (the API answers some calls with one) but copies the {@code Authorization}
      * header only to the configured API host: HttpClient otherwise copies every header of the original
      * request, token included, to whatever host the redirect names.
+     * <p>
+     * A 307/308 redirect (the API answers 308 when a path lacks its trailing slash) is already a copy
+     * of the original request, headers included: adding them again sends {@code Authorization} twice,
+     * which the API's nginx refuses with 400. Other redirects come back without headers, and
+     * RedirectExec then copies every original header unless the redirect holds one.
      */
     private final class TokenSafeRedirectStrategy extends LaxRedirectStrategy {
         @Override
@@ -86,6 +91,12 @@ public class ExactlyProxyClient {
                 throws ProtocolException {
             HttpUriRequest redirect = super.getRedirect(request, response, context);
             boolean keepAuth = isApiHost(redirect.getURI());
+            if (redirect.headerIterator().hasNext()) {
+                if (!keepAuth) {
+                    redirect.removeHeaders(HttpHeaders.AUTHORIZATION);
+                }
+                return redirect;
+            }
             for (Header header : request.getAllHeaders()) {
                 if (keepAuth || !HttpHeaders.AUTHORIZATION.equalsIgnoreCase(header.getName())) {
                     redirect.addHeader(header);

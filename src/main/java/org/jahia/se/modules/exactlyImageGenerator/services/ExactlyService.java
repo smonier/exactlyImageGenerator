@@ -47,7 +47,7 @@ public class ExactlyService {
      */
     public List<Map<String, Object>> listStyles() throws Exception {
         logger.debug("Fetching models from Exactly API");
-        String response = proxyClient.get(buildEndpoint("/models"));
+        String response = proxyClient.get(buildEndpoint("/models/"));
         
         JSONObject json = new JSONObject(response);
         JSONArray styles = json.optJSONArray("items");
@@ -90,7 +90,7 @@ public class ExactlyService {
         }
         payload.put("custom_data", customData);
         
-        String response = proxyClient.post(buildEndpoint("/models"), payload.toString());
+        String response = proxyClient.post(buildEndpoint("/models/"), payload.toString());
         JSONObject json = new JSONObject(response);
         
         String uid = json.optString("uid");
@@ -260,7 +260,7 @@ public class ExactlyService {
     public Map<String, Object> trainStyle(String styleId) throws Exception {
         logger.info("Starting training for model: {}", styleId);
         
-        String endpoint = buildEndpoint("/models/" + id(styleId) + "/train");
+        String endpoint = buildEndpoint("/models/" + id(styleId) + "/train/");
         String response = proxyClient.post(endpoint, null);
         
         JSONObject json = new JSONObject(response);
@@ -279,7 +279,7 @@ public class ExactlyService {
     public Map<String, Object> getStyleStatus(String styleId) throws Exception {
         logger.debug("Checking status for model: {}", styleId);
         
-        String endpoint = buildEndpoint("/models/" + id(styleId) + "/train/progress");
+        String endpoint = buildEndpoint("/models/" + id(styleId) + "/train/progress/");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
@@ -356,7 +356,7 @@ public class ExactlyService {
             }
         }
         
-        String response = proxyClient.post(buildEndpoint("/images"), payload.toString());
+        String response = proxyClient.post(buildEndpoint("/images/"), payload.toString());
         JSONObject json = new JSONObject(response);
         
         List<String> urls = new ArrayList<>();
@@ -388,7 +388,7 @@ public class ExactlyService {
     public Map<String, Object> getModel(String modelUid) throws Exception {
         logger.debug("Fetching model: {}", modelUid);
         
-        String endpoint = buildEndpoint("/models/" + id(modelUid));
+        String endpoint = buildEndpoint("/models/" + id(modelUid) + "/");
         String response = proxyClient.get(endpoint);
         
         JSONObject json = new JSONObject(response);
