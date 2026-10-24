@@ -55,6 +55,8 @@
     "deleteFailed": "The style could not be deleted: {{message}}",
     "select": "Select",
     "selected": "Selected",
+    "progress": "Training: {{progress}}%",
+    "progressPending": "Starting...",
     "viewTraining": "Training images",
     "viewTrainingOf": "Training images of {{name}}",
     "emptyTitle": "No style yet",

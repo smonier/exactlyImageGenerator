@@ -17,7 +17,8 @@ The app has three steps, shown as tabs in its header:
 1. **Style.** The styles of the site, synchronized from the models of the Exactly.ai account
    (*Sync from Exactly.ai*; the app also syncs once when it opens). Create a style with *New
    style*, delete one with the bin (the model is deleted on Exactly.ai too). *Select* opens the
-   next step; *Training images* opens a style's training images whatever its status. Sync removes
+   next step; *Training images* opens a style's training images whatever its status. A style in
+   training shows its progress in its row, and the list resyncs when the training ends. Sync removes
    styles whose model was deleted on the account, and deleting a style whose model is already gone
    removes it locally.
 2. **Training.** The training images already on Exactly.ai, and *Pick images* to choose images of
@@ -54,8 +55,9 @@ Changes are picked up without a restart. One token serves every site of the serv
   the style. A refusal is the GraphQL error `Permission denied`, the same for a missing node and a
   missing right. A style is pinned to its type and to its site's styles folder.
 - In practice: an editor can do everything, a reviewer can look but not train, generate or save.
-- Training images are read with the caller's session and only from the site's own `files`; generated
-  images are saved with the caller's session, only into a folder of the site's `files`.
+- Training images are read with the caller's session: only image files the caller can read (any
+  site's media library, as in the picker), 20 MB at most each. Generated images are saved with the
+  caller's session, only into a folder of the style's site `files`.
 - *Save* names a generation and image indices, never a URL: the server only downloads URLs that
   Exactly.ai returned to it for that user's generation (kept in memory for 6 hours, per cluster
   node). Downloads are `https` only, capped at 25 MB, and must be PNG, JPEG or WebP.

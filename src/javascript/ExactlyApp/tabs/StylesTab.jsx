@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {useMutation, useQuery} from '@apollo/client';
 import {useTranslation} from 'react-i18next';
 import {
@@ -22,7 +22,7 @@ import {
 import {NS, STATUS} from '../constants';
 import {CREATE_STYLE, DELETE_STYLE, STYLES, SYNC_STYLES, errorMessage, readAnswer} from '../graphql';
 import {Section} from '../ui/Section';
-import {StatusChip} from '../ui/StatusChip';
+import {StatusCell} from '../ui/StatusCell';
 import {ConfirmModal} from '../ui/ConfirmModal';
 import classes from '../ui/layout.module.css';
 
@@ -82,6 +82,11 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [canCallExactly]);
 
+    // A training that ends while the list is open: resync so the row shows the status Exactly now holds
+    const syncRef = useRef(sync);
+    syncRef.current = sync;
+    const onTrainingFinished = useCallback(() => syncRef.current({quiet: true}), []);
+
     const closeCreate = () => {
         setCreateOpen(false);
         setNewName('');
@@ -131,7 +136,7 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
             key: 'status',
             label: t('styles.columns.status'),
             width: '15%',
-            render: ({value}) => <StatusChip status={value}/>
+            render: ({value, data: row}) => <StatusCell styleUuid={row.uuid} status={value} onFinished={onTrainingFinished}/>
         },
         {
             key: 'lastSynced',

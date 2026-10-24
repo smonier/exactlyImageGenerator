@@ -33,6 +33,22 @@ public class ExactlyService {
     /** Generation options a caller may set, see the Exactly "create images" call. */
     private static final List<String> GENERATION_PARAMS = Arrays.asList("num_images", "size", "reference_images");
 
+    /** The API's own {@code message} from {@code API call failed: <status> - {...}}, else the text as is. */
+    private static String apiMessage(String text) {
+        int jsonStart = text != null ? text.indexOf('{') : -1;
+        if (jsonStart >= 0) {
+            try {
+                String message = new JSONObject(text.substring(jsonStart)).optString("message");
+                if (!message.isEmpty()) {
+                    return message;
+                }
+            } catch (JSONException e) {
+                // not JSON: keep the text
+            }
+        }
+        return text;
+    }
+
     private static String id(String value) {
         return ExactlyAccessService.requireExternalId(value);
     }
@@ -145,7 +161,10 @@ public class ExactlyService {
             } catch (Exception e) {
                 logger.warn("Failed to upload training image {}: {}", image.getName(), e.getMessage());
                 failureCount++;
-                errorMessages.append(image.getName()).append(": ").append(e.getMessage()).append("; ");
+                if (errorMessages.length() > 0) {
+                    errorMessages.append("; ");
+                }
+                errorMessages.append(image.getName()).append(": ").append(apiMessage(e.getMessage()));
             }
         }
 

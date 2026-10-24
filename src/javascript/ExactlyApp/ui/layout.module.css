@@ -169,6 +169,13 @@
     overflow-wrap: anywhere;
 }
 
+.statusCell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--moon-spacing-nano);
+}
+
 .cellActions {
     display: flex;
     justify-content: flex-end;

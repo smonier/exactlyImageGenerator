@@ -52,18 +52,20 @@ public class DamService {
     }
 
     /**
-     * Reads an image of the site's media library.
+     * Reads an image of the media library with the caller's session, so only a file the caller may
+     * read is ever returned. Any site's files qualify (shared media, another site's library), as in
+     * jContent's picker.
      *
      * @param session   the caller's session
-     * @param site      the site, already checked
-     * @param assetUuid identifier of a {@code jnt:file} under {@code <site>/files} with an image type
+     * @param assetUuid identifier of a {@code jnt:file} with an image type
      * @return the file name and content
-     * @throws AccessDeniedException when the node is unknown, unreadable, not an image of this site's
-     *                               files, or larger than {@value #MAX_TRAINING_IMAGE_BYTES} bytes
-     * @throws RepositoryException   on a repository error
-     * @throws IOException           when the binary cannot be read
+     * @throws AccessDeniedException     when the node is unknown or unreadable by the caller
+     * @throws IllegalArgumentException  when it is not an image file or is larger than
+     *                                   {@value #MAX_TRAINING_IMAGE_BYTES} bytes (the message names the file)
+     * @throws RepositoryException       on a repository error
+     * @throws IOException               when the binary cannot be read
      */
-    public DamImage readImage(JCRSessionWrapper session, JCRSiteNode site, String assetUuid)
+    public DamImage readImage(JCRSessionWrapper session, String assetUuid)
             throws AccessDeniedException, RepositoryException, IOException {
         JCRNodeWrapper file;
         try {
@@ -71,22 +73,22 @@ public class DamService {
         } catch (ItemNotFoundException | IllegalArgumentException e) {
             throw new AccessDeniedException();
         }
-        if (!file.isNodeType("jnt:file") || !file.getPath().startsWith(site.getPath() + "/files/")
-                || !file.hasNode("jcr:content")) {
-            throw new AccessDeniedException();
+        String name = file.getName();
+        if (!file.isNodeType("jnt:file") || !file.hasNode("jcr:content")) {
+            throw new IllegalArgumentException(name + " is not a file of the media library");
         }
         JCRNodeWrapper content = file.getNode("jcr:content");
         String mimeType = content.hasProperty("jcr:mimeType") ? content.getProperty("jcr:mimeType").getString() : "";
         if (!mimeType.startsWith("image/")) {
-            throw new AccessDeniedException();
+            throw new IllegalArgumentException(name + " is not an image");
         }
         Binary binary = content.getProperty("jcr:data").getBinary();
         try {
             if (binary.getSize() > MAX_TRAINING_IMAGE_BYTES) {
-                throw new AccessDeniedException();
+                throw new IllegalArgumentException(name + " is larger than " + (MAX_TRAINING_IMAGE_BYTES / (1024 * 1024)) + " MB");
             }
             try (InputStream in = binary.getStream()) {
-                return new DamImage(file.getName(), IOUtils.toByteArray(in));
+                return new DamImage(name, IOUtils.toByteArray(in));
             }
         } finally {
             binary.dispose();

@@ -55,6 +55,8 @@
     "deleteFailed": "Le style n'a pas pu être supprimé : {{message}}",
     "select": "Sélectionner",
     "selected": "Sélectionné",
+    "progress": "Entraînement : {{progress}} %",
+    "progressPending": "Démarrage...",
     "viewTraining": "Images d'entraînement",
     "viewTrainingOf": "Images d'entraînement de {{name}}",
     "emptyTitle": "Aucun style",

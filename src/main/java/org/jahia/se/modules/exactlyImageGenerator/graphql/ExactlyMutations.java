@@ -131,7 +131,7 @@ public class ExactlyMutations extends ExactlyOperations {
 
     @GraphQLField
     @GraphQLName("uploadTrainingImages")
-    @GraphQLDescription("Send images of the site's media library to Exactly as training images of a style")
+    @GraphQLDescription("Send images of the media library the caller can read to Exactly as training images of a style")
     public ExactlySyncResponse uploadTrainingImages(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid,
                                                     @GraphQLName("damAssetUuids") @GraphQLNonNull List<String> damAssetUuids) {
         return run("uploadTrainingImages", () -> {
@@ -142,14 +142,17 @@ public class ExactlyMutations extends ExactlyOperations {
             JCRSessionWrapper session = access.userSession();
             JCRNodeWrapper style = access.requireStyle(session, styleUuid, true);
             String exactlyId = exactlyIdOf(style);
-            JCRSiteNode site = style.getResolveSite();
-            // Read every image first: one refused image refuses the whole call
+            // Read every image first, with the caller's session: one refused image refuses the whole call
             List<DamService.DamImage> images = new ArrayList<>();
             for (String uuid : uuids) {
-                images.add(damService.readImage(session, site, uuid));
+                images.add(damService.readImage(session, uuid));
             }
             Map<String, Object> result = exactlyService.uploadTrainingImages(exactlyId, images);
-            return new ExactlySyncResponseImpl(!"failed".equals(result.get("status")), (String) result.get("message"));
+            String message = (String) result.get("message");
+            if (result.get("errors") != null) {
+                message += " - " + result.get("errors");
+            }
+            return new ExactlySyncResponseImpl(!"failed".equals(result.get("status")), message);
         });
     }
 
