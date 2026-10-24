@@ -34,7 +34,7 @@
     <groupId>org.jahia.se.modules</groupId>
     <artifactId>exactlyImageGenerator</artifactId>
     <name>Exactly.ai Image Generator</name>
-    <version>1.1.1-SNAPSHOT</version>
+    <version>1.1.1</version>
     <packaging>bundle</packaging>
     <description>jContent app that trains Exactly.ai image styles on the media library, generates images with them and saves the ones editors keep back into the media library.</description>
 

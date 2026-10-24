@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.1.1 (unreleased)
+## 1.1.1 (2026-10-24)
 
 - The screens use the full width of jContent, with the same margin on both sides (they stopped at 1200 px).
 - The styles list shows a thumbnail of each style (its first training image), so you can see what a style looks like, and dates in a short format. Thumbnails are made once at sync (160 px, a few kB, kept on the style node) and refreshed when training images change, so opening the list no longer downloads anything from Exactly.ai.
