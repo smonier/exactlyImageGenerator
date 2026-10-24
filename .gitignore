@@ -21,3 +21,10 @@ target
 !.yarn/versions
 
 .env
+
+# macOS
+.DS_Store
+
+# Release plugin leftovers
+release.properties
+pom.xml.releaseBackup

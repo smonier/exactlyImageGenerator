@@ -1,0 +1,264 @@
+/* Layout only: spacing and arrangement. Colours, type and controls come from Moonstone components and tokens. */
+
+/* The panel takes its container's width, never its widest content's (jContent 3.8 sizes an app on it). */
+.root {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    contain: inline-size;
+    /* Moonstone's Modal is portaled to body with z-index auto, and DataTable rows carry a z-index:
+       without a stacking context here, the table paints over the open modal. */
+    isolation: isolate;
+}
+
+/* LayoutContent's wrapper is a wrapping flex column: the content must not report a max-content width. */
+.content {
+    height: 100%;
+    width: 100%;
+    min-width: 0;
+    overflow-y: auto;
+    contain: inline-size;
+}
+
+.page {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-large);
+    width: 100%;
+    max-width: 1200px;
+    min-width: 0;
+}
+
+/* Moonstone spaces stacked Papers with a margin; inside our flex containers the gap does it. */
+.page > :global(.moonstone-paper) + :global(.moonstone-paper),
+.stack > :global(.moonstone-paper) + :global(.moonstone-paper) {
+    margin-top: 0;
+}
+
+/* Header tabs stay on one line and scroll: the Header has a fixed height. */
+.tabsScroll {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: thin;
+}
+
+.tabsScroll > * {
+    flex-wrap: nowrap;
+    width: max-content;
+}
+
+.stack {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-medium);
+}
+
+.sectionHead {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--moon-spacing-medium);
+    flex-wrap: wrap;
+}
+
+.sectionTitle {
+    display: flex;
+    flex: 1 1 280px;
+    flex-direction: column;
+    gap: var(--moon-spacing-nano);
+    min-width: 0;
+}
+
+.sectionBody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-medium);
+    margin-top: var(--moon-spacing-medium);
+}
+
+.actions,
+.row {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    flex-wrap: wrap;
+}
+
+.bannerBody {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--moon-spacing-small);
+}
+
+.wrap {
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+    gap: var(--moon-spacing-medium);
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.inlineForm {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    max-width: 100%;
+}
+
+.inlineInput {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.center {
+    display: flex;
+    justify-content: center;
+    padding: var(--moon-spacing-big);
+}
+
+/* A wide table scrolls inside its card; Moonstone rows are wrapping flex rows with fixed-height cells. */
+.tableScroll {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.tableScroll > * {
+    min-width: 640px;
+}
+
+.tableScroll tbody tr {
+    height: auto;
+    min-height: 48px;
+}
+
+.tableScroll tbody td {
+    height: auto;
+    padding-top: var(--moon-spacing-small);
+    padding-bottom: var(--moon-spacing-small);
+}
+
+.clickableRow {
+    cursor: pointer;
+}
+
+.selectedRow {
+    cursor: pointer;
+    background-color: var(--moon-color-accent_light20);
+}
+
+.cellText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--moon-spacing-nano);
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.statusCell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--moon-spacing-nano);
+}
+
+.cellActions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--moon-spacing-small);
+    width: 100%;
+}
+
+/* Image grids */
+.imageGrid,
+.resultGrid {
+    display: grid;
+    gap: var(--moon-spacing-medium);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.imageGrid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+}
+
+.resultGrid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.tile,
+.result,
+.resultSelected {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid var(--moon-color-gray_light40);
+    border-radius: var(--moon-radius);
+}
+
+.resultSelected {
+    border-color: var(--moon-color-accent);
+    box-shadow: 0 0 0 1px var(--moon-color-accent);
+}
+
+.tileImage,
+.resultImage {
+    display: block;
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    background-color: var(--moon-color-gray_light40);
+}
+
+.resultImage {
+    object-fit: contain;
+}
+
+.tileBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--moon-spacing-nano);
+    padding: var(--moon-spacing-nano) var(--moon-spacing-small);
+    min-width: 0;
+}
+
+.tileName {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.referenceRow {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--moon-spacing-medium);
+    flex-wrap: wrap;
+    padding-bottom: var(--moon-spacing-medium);
+    border-bottom: 1px solid var(--moon-color-gray_light40);
+}
+
+.referenceImage {
+    width: 96px;
+    height: 96px;
+    object-fit: cover;
+    border-radius: var(--moon-radius);
+}

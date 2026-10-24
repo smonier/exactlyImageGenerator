@@ -1,13 +1,13 @@
 const path = require('path');
-const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
-const { CleanWebpackPlugin } = require('clean-webpack-plugin');
+const {BundleAnalyzerPlugin} = require('webpack-bundle-analyzer');
+const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
-const ModuleFederationPlugin = require("webpack/lib/container/ModuleFederationPlugin");
+const ModuleFederationPlugin = require('webpack/lib/container/ModuleFederationPlugin');
 const getModuleFederationConfig = require('@jahia/webpack-config/getModuleFederationConfig');
 const packageJson = require('./package.json');
 
 module.exports = (env, argv) => {
-    let config = {
+    const config = {
         entry: {
             main: path.resolve(__dirname, 'src/javascript/index')
         },
@@ -18,18 +18,11 @@ module.exports = (env, argv) => {
         },
         resolve: {
             mainFields: ['module', 'main'],
-            extensions: ['.mjs', '.js', '.jsx', 'json'],
-            alias: {
-                'react/jsx-runtime': require.resolve('react/jsx-runtime'),
-                'react/jsx-dev-runtime': require.resolve('react/jsx-dev-runtime')
-            }
+            extensions: ['.mjs', '.js', '.jsx', '.json']
         },
         module: {
             rules: [
-                {
-                    test: /\.m?js$/,
-                    type: 'javascript/auto'
-                },
+                {test: /\.m?js$/, type: 'javascript/auto', resolve: {fullySpecified: false}},
                 {
                     test: /\.jsx?$/,
                     include: [path.join(__dirname, 'src')],
@@ -37,49 +30,34 @@ module.exports = (env, argv) => {
                         loader: 'babel-loader',
                         options: {
                             presets: [
-                                ['@babel/preset-env', {modules: false, targets: {safari: '7', ie: '10'}}],
-                                ['@babel/preset-react', {runtime: 'automatic'}]
+                                ['@babel/preset-env', {modules: false, targets: {chrome: '100', firefox: '100', safari: '15'}}],
+                                ['@babel/preset-react', {runtime: 'classic'}]
                             ],
-                            plugins: [
-                                '@babel/plugin-syntax-dynamic-import'
-                            ]
+                            plugins: ['@babel/plugin-syntax-dynamic-import']
                         }
                     }
                 },
                 {
-                    test: /\.css$/i,
-                    use: [
-                        'style-loader',
-                        'css-loader'
-                    ]
+                    test: /\.module\.css$/,
+                    use: ['style-loader', {loader: 'css-loader', options: {modules: {namedExport: false}}}]
                 },
                 {
-                    test: /\.s[ac]ss$/i,
-                    use: [
-                        'style-loader',
-                        {
-                            loader:'css-loader',
-                            options: {
-                                modules: true
-                            }
-                        },
-                        'sass-loader'
-                    ]
+                    test: /\.css$/,
+                    exclude: /\.module\.css$/,
+                    use: ['style-loader', 'css-loader']
                 }
             ]
         },
         plugins: [
             new ModuleFederationPlugin(getModuleFederationConfig(packageJson)),
             new CleanWebpackPlugin({verbose: false}),
-            new CopyWebpackPlugin({patterns:[{from: './package.json', to: ''}]})
+            new CopyWebpackPlugin({patterns: [{from: './package.json', to: ''}]})
         ],
-        mode: 'development'
+        mode: 'development',
+        devtool: argv?.mode === 'production' ? 'source-map' : 'eval-source-map'
     };
 
-    config.devtool = (argv.mode === 'production') ? 'source-map' : 'eval-source-map';
-
-    if (argv.analyze) {
-        config.devtool = 'source-map';
+    if (argv?.analyze) {
         config.plugins.push(new BundleAnalyzerPlugin());
     }
 

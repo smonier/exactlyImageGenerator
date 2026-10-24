@@ -1,181 +1,292 @@
 package org.jahia.se.modules.exactlyImageGenerator.proxy;
 
+import org.apache.http.Header;
 import org.apache.http.HttpEntity;
+import org.apache.http.HttpHeaders;
+import org.apache.http.HttpRequest;
 import org.apache.http.HttpResponse;
+import org.apache.http.ProtocolException;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.*;
+import org.apache.http.client.methods.HttpUriRequest;
+import org.apache.http.impl.client.LaxRedirectStrategy;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.client.LaxRedirectStrategy;
 import org.apache.http.util.EntityUtils;
 import org.jahia.se.modules.exactlyImageGenerator.cfg.ExactlyConfiguration;
+import org.osgi.service.component.annotations.Activate;
 import org.osgi.service.component.annotations.Component;
+import org.osgi.service.component.annotations.Deactivate;
 import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URI;
+import java.util.Locale;
 import java.util.Map;
 
 /**
- * Low-level HTTP client for Exactly.ai API
- * Handles authentication, streaming, multipart uploads
+ * Low-level HTTP client for the Exactly.ai API.
+ * <p>
+ * One pooled client per component instance, with connect and read timeouts. The bearer token is only
+ * ever sent to the configured API host; image downloads are bounded in size and never follow redirects
+ * to another host with the token. Thread-safe.
  */
 @Component(service = ExactlyProxyClient.class, immediate = true)
 public class ExactlyProxyClient {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(ExactlyProxyClient.class);
-    
+
+    private static final int CONNECT_TIMEOUT_MS = 10_000;
+    private static final int SOCKET_TIMEOUT_MS = 180_000;
+    /** Largest generated image the module accepts to download (bytes). */
+    public static final int MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+
     @Reference
     private ExactlyConfiguration configuration;
-    
-    /**
-     * Create HTTP client with redirect support
-     */
-    private CloseableHttpClient createHttpClient() {
-        return HttpClients.custom()
-            .setRedirectStrategy(new LaxRedirectStrategy())
-            .build();
+
+    private CloseableHttpClient client;
+
+    @Activate
+    void activate() {
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(CONNECT_TIMEOUT_MS)
+                .setConnectionRequestTimeout(CONNECT_TIMEOUT_MS)
+                .setSocketTimeout(SOCKET_TIMEOUT_MS)
+                .build();
+        client = HttpClients.custom()
+                .setDefaultRequestConfig(requestConfig)
+                .setRedirectStrategy(new TokenSafeRedirectStrategy())
+                .setMaxConnTotal(20)
+                .setMaxConnPerRoute(10)
+                .build();
     }
-    
+
     /**
-     * Execute GET request
+     * Follows redirects (the API answers some calls with one) but copies the {@code Authorization}
+     * header only to the configured API host: HttpClient otherwise copies every header of the original
+     * request, token included, to whatever host the redirect names.
+     * <p>
+     * A 307/308 redirect (the API answers 308 when a path lacks its trailing slash) is already a copy
+     * of the original request, headers included: adding them again sends {@code Authorization} twice,
+     * which the API's nginx refuses with 400. Other redirects come back without headers, and
+     * RedirectExec then copies every original header unless the redirect holds one.
+     */
+    private final class TokenSafeRedirectStrategy extends LaxRedirectStrategy {
+        @Override
+        public HttpUriRequest getRedirect(HttpRequest request, HttpResponse response, HttpContext context)
+                throws ProtocolException {
+            HttpUriRequest redirect = super.getRedirect(request, response, context);
+            boolean keepAuth = isApiHost(redirect.getURI());
+            if (redirect.headerIterator().hasNext()) {
+                if (!keepAuth) {
+                    redirect.removeHeaders(HttpHeaders.AUTHORIZATION);
+                }
+                return redirect;
+            }
+            for (Header header : request.getAllHeaders()) {
+                if (keepAuth || !HttpHeaders.AUTHORIZATION.equalsIgnoreCase(header.getName())) {
+                    redirect.addHeader(header);
+                }
+            }
+            if (!redirect.headerIterator().hasNext()) {
+                // An empty header set makes RedirectExec copy the original headers back.
+                redirect.addHeader(HttpHeaders.ACCEPT, "*/*");
+            }
+            return redirect;
+        }
+    }
+
+    @Deactivate
+    void deactivate() throws IOException {
+        if (client != null) {
+            client.close();
+        }
+    }
+
+    /** A downloaded binary and its declared media type. */
+    public static final class Download {
+        private final byte[] data;
+        private final String mimeType;
+
+        Download(byte[] data, String mimeType) {
+            this.data = data;
+            this.mimeType = mimeType;
+        }
+
+        public byte[] getData() {
+            return data;
+        }
+
+        public String getMimeType() {
+            return mimeType;
+        }
+    }
+
+    /**
+     * GET an API endpoint.
+     *
+     * @param endpoint path below the base URL, starting with {@code /}
+     * @return the response body
+     * @throws IOException on a network error or a non-2xx answer
      */
     public String get(String endpoint) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpGet request = new HttpGet(url);
-        addAuthHeader(request);
-        
-        try (CloseableHttpClient client = createHttpClient()) {
-            HttpResponse response = client.execute(request);
-            return handleResponse(response);
-        }
+        return execute(new HttpGet(buildUrl(endpoint)));
     }
-    
+
     /**
-     * Execute POST request with JSON body
+     * POST a JSON body to an API endpoint.
+     *
+     * @param endpoint path below the base URL
+     * @param jsonBody body, or {@code null} for none
+     * @return the response body
+     * @throws IOException on a network error or a non-2xx answer
      */
     public String post(String endpoint, String jsonBody) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpPost request = new HttpPost(url);
-        addAuthHeader(request);
-        
+        HttpPost request = new HttpPost(buildUrl(endpoint));
         if (jsonBody != null) {
             request.setEntity(new StringEntity(jsonBody, ContentType.APPLICATION_JSON));
         }
-        
-        try (CloseableHttpClient client = createHttpClient()) {
-            HttpResponse response = client.execute(request);
-            return handleResponse(response);
-        }
+        return execute(request);
     }
-    
+
     /**
-     * Execute POST with multipart file upload
+     * POST one file as multipart ({@code image} part) to an API endpoint.
+     *
+     * @param endpoint path below the base URL
+     * @param fileName name of the uploaded file
+     * @param data     file content
+     * @return the response body
+     * @throws IOException on a network error or a non-2xx answer
      */
-    public String postMultipart(String endpoint, Map<String, InputStream> files, Map<String, String> fields) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpPost request = new HttpPost(url);
-        addAuthHeader(request);
-        
-        MultipartEntityBuilder builder = MultipartEntityBuilder.create();
-        
-        // Add fields
-        if (fields != null) {
-            fields.forEach((key, value) -> builder.addTextBody(key, value));
-        }
-        
-        // Add files
-        if (files != null) {
-            files.forEach((fileName, inputStream) -> {
-                builder.addBinaryBody("image", inputStream, ContentType.APPLICATION_OCTET_STREAM, fileName);
-            });
-        }
-        
-        request.setEntity(builder.build());
-        
-        try (CloseableHttpClient client = createHttpClient()) {
-            HttpResponse response = client.execute(request);
-            return handleResponse(response);
-        }
+    public String postFile(String endpoint, String fileName, byte[] data) throws IOException {
+        HttpPost request = new HttpPost(buildUrl(endpoint));
+        request.setEntity(MultipartEntityBuilder.create()
+                .addBinaryBody("image", new ByteArrayInputStream(data), ContentType.APPLICATION_OCTET_STREAM, fileName)
+                .build());
+        return execute(request);
     }
-    
+
     /**
-     * Download file as input stream (for image downloads)
-     */
-    public InputStream getStream(String endpoint) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpGet request = new HttpGet(url);
-        addAuthHeader(request);
-        
-        CloseableHttpClient client = createHttpClient();
-        HttpResponse response = client.execute(request);
-        
-        int statusCode = response.getStatusLine().getStatusCode();
-        if (statusCode >= 200 && statusCode < 300) {
-            return response.getEntity().getContent();
-        } else {
-            client.close();
-            throw new IOException("Failed to download: " + statusCode + " - " + response.getStatusLine().getReasonPhrase());
-        }
-    }
-    
-    /**
-     * Download from absolute URL (for generated images)
-     */
-    public InputStream getStreamFromUrl(String absoluteUrl) throws IOException {
-        HttpGet request = new HttpGet(absoluteUrl);
-        addAuthHeader(request);
-        
-        CloseableHttpClient client = createHttpClient();
-        HttpResponse response = client.execute(request);
-        
-        int statusCode = response.getStatusLine().getStatusCode();
-        if (statusCode >= 200 && statusCode < 300) {
-            return response.getEntity().getContent();
-        } else {
-            client.close();
-            throw new IOException("Failed to download from URL: " + statusCode);
-        }
-    }
-    
-    /**
-     * Execute PUT request
+     * PUT a JSON body to an API endpoint.
+     *
+     * @param endpoint path below the base URL
+     * @param jsonBody body, or {@code null} for none
+     * @return the response body
+     * @throws IOException on a network error or a non-2xx answer
      */
     public String put(String endpoint, String jsonBody) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpPut request = new HttpPut(url);
-        addAuthHeader(request);
-        
+        HttpPut request = new HttpPut(buildUrl(endpoint));
         if (jsonBody != null) {
             request.setEntity(new StringEntity(jsonBody, ContentType.APPLICATION_JSON));
         }
-        
-        try (CloseableHttpClient client = createHttpClient()) {
-            HttpResponse response = client.execute(request);
-            return handleResponse(response);
-        }
+        return execute(request);
     }
-    
+
     /**
-     * Execute DELETE request
+     * DELETE an API endpoint.
+     *
+     * @param endpoint path below the base URL
+     * @return the response body
+     * @throws IOException on a network error or a non-2xx answer
      */
     public String delete(String endpoint) throws IOException {
-        String url = buildUrl(endpoint);
-        HttpDelete request = new HttpDelete(url);
-        addAuthHeader(request);
-        
-        try (CloseableHttpClient client = createHttpClient()) {
-            HttpResponse response = client.execute(request);
-            return handleResponse(response);
+        return execute(new HttpDelete(buildUrl(endpoint)));
+    }
+
+    /**
+     * Downloads an image URL that the Exactly API returned. Only {@code https} URLs are fetched; the
+     * token is attached only when the URL is on the configured API host; the body is capped at
+     * {@link #MAX_DOWNLOAD_BYTES}. Callers must only pass URLs the API itself issued.
+     *
+     * @param absoluteUrl the image URL
+     * @return the bytes and media type
+     * @throws IOException on a refused URL, a network error, a non-2xx answer or an oversized body
+     */
+    public Download download(String absoluteUrl) throws IOException {
+        URI uri = URI.create(absoluteUrl);
+        if (!"https".equalsIgnoreCase(uri.getScheme()) || uri.getHost() == null) {
+            throw new IOException("Refused image URL (https only)");
+        }
+        HttpGet request = new HttpGet(uri);
+        if (isApiHost(uri)) {
+            addAuthHeader(request);
+        }
+        try (CloseableHttpResponse response = client.execute(request)) {
+            int status = response.getStatusLine().getStatusCode();
+            HttpEntity entity = response.getEntity();
+            if (status < 200 || status >= 300 || entity == null) {
+                EntityUtils.consumeQuietly(entity);
+                throw new IOException("Image download failed: HTTP " + status);
+            }
+            if (entity.getContentLength() > MAX_DOWNLOAD_BYTES) {
+                EntityUtils.consumeQuietly(entity);
+                throw new IOException("Image too large");
+            }
+            ContentType contentType = ContentType.get(entity);
+            String mimeType = contentType != null ? contentType.getMimeType().toLowerCase(Locale.ROOT) : null;
+            return new Download(readBounded(entity.getContent()), mimeType);
         }
     }
-    
-    private String buildUrl(String endpoint) {
+
+    private static byte[] readBounded(InputStream in) throws IOException {
+        try (InputStream input = in; ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int total = 0;
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                total += read;
+                if (total > MAX_DOWNLOAD_BYTES) {
+                    throw new IOException("Image too large");
+                }
+                out.write(buffer, 0, read);
+            }
+            return out.toByteArray();
+        }
+    }
+
+    private boolean isApiHost(URI uri) {
+        String baseUrl = configuration.getApiBaseUrl();
+        if (baseUrl == null) {
+            return false;
+        }
+        URI base = URI.create(baseUrl);
+        return base.getHost() != null && base.getHost().equalsIgnoreCase(uri.getHost());
+    }
+
+    private String execute(HttpRequestBase request) throws IOException {
+        addAuthHeader(request);
+        try (CloseableHttpResponse response = client.execute(request)) {
+            int statusCode = response.getStatusLine().getStatusCode();
+            HttpEntity entity = response.getEntity();
+            String body = entity != null ? EntityUtils.toString(entity) : "";
+            if (statusCode >= 200 && statusCode < 300) {
+                logger.debug("Exactly API call successful: {} {}", request.getMethod(), statusCode);
+                return body;
+            }
+            logger.warn("Exactly API call failed: {} {}", request.getMethod(), statusCode);
+            logger.debug("Exactly API error body: {}", body);
+            throw new IOException("API call failed: " + statusCode + " - " + body);
+        }
+    }
+
+    private String buildUrl(String endpoint) throws IOException {
+        if (!configuration.isConfigured()) {
+            throw new IOException("Exactly API is not configured");
+        }
         String baseUrl = configuration.getApiBaseUrl();
         if (baseUrl.endsWith("/") && endpoint.startsWith("/")) {
             return baseUrl + endpoint.substring(1);
@@ -184,25 +295,11 @@ public class ExactlyProxyClient {
         }
         return baseUrl + endpoint;
     }
-    
+
     private void addAuthHeader(HttpRequestBase request) {
         String token = configuration.getApiToken();
-        if (token != null && !token.trim().isEmpty()) {
+        if (token != null) {
             request.addHeader("Authorization", "Bearer " + token);
-        }
-    }
-    
-    private String handleResponse(HttpResponse response) throws IOException {
-        int statusCode = response.getStatusLine().getStatusCode();
-        HttpEntity entity = response.getEntity();
-        String body = entity != null ? EntityUtils.toString(entity) : "";
-        
-        if (statusCode >= 200 && statusCode < 300) {
-            logger.debug("API call successful: {}", statusCode);
-            return body;
-        } else {
-            logger.error("API call failed: {} - {}", statusCode, body);
-            throw new IOException("API call failed: " + statusCode + " - " + body);
         }
     }
 }

@@ -1,254 +1,211 @@
 package org.jahia.se.modules.exactlyImageGenerator.services;
 
-import org.jahia.services.content.*;
+import org.jahia.services.content.JCRContentUtils;
+import org.jahia.services.content.JCRNodeIteratorWrapper;
+import org.jahia.services.content.JCRNodeWrapper;
+import org.jahia.services.content.JCRSessionWrapper;
+import org.jahia.services.content.decorator.JCRSiteNode;
 import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jcr.Node;
-import javax.jcr.NodeIterator;
 import javax.jcr.RepositoryException;
-import javax.jcr.query.Query;
-import javax.jcr.query.QueryManager;
-import javax.jcr.query.QueryResult;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Calendar;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
- * Repository service for managing eximgynt:style nodes
+ * Stores the Exactly styles of a site as {@code eximgynt:style} nodes in
+ * {@code /sites/<key>/contents/exactly-styles}.
+ * <p>
+ * Every method works with the session it is given (the caller's, checked by
+ * {@link ExactlyAccessService}) and saves it; nothing here opens a system session. Stateless and
+ * thread-safe, but a session must not be shared between threads.
  */
-@Component(service = JcrStyleRepository.class, immediate = true)
+@Component(service = JcrStyleRepository.class)
 public class JcrStyleRepository {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(JcrStyleRepository.class);
-    
-    private static final String STYLE_NODE_TYPE = "eximgynt:style";
-    private static final String STYLES_FOLDER_NAME = "exactly-styles";
-    
-    @Reference
-    private JCRStoreService jcrStoreService;
-    
-    /**
-     * Find or create style node by Exactly ID
-     */
-    public Node findOrCreateStyle(String siteKey, String exactlyId, String name, String status, Boolean active, String metadata, String description) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            // Validate inputs
-            if (exactlyId == null || exactlyId.trim().isEmpty()) {
-                logger.error("Cannot create/update style with null or empty exactlyId");
-                throw new RepositoryException("exactlyId is required");
-            }
-            
-            // Ensure folder exists
-            Node stylesFolder = ensureStylesFolder(session, siteKey);
-            
-            // Search for existing style
-            Node existingStyle = findStyleByExactlyId(session, siteKey, exactlyId);
-            if (existingStyle != null) {
-                // Update existing style
-                if (name != null) {
-                    existingStyle.setProperty("eximg:name", name);
-                    existingStyle.setProperty("jcr:title", name);
-                }
-                if (status != null && !status.trim().isEmpty()) {
-                    existingStyle.setProperty("eximg:status", status);
-                }
-                if (active != null) {
-                    existingStyle.setProperty("eximg:active", active);
-                }
-                if (metadata != null) {
-                    existingStyle.setProperty("eximg:metadata", metadata);
-                }
-                if (description != null) {
-                    existingStyle.setProperty("eximg:description", description);
-                }
-                existingStyle.setProperty("eximg:lastSynced", Calendar.getInstance());
-                session.save();
-                logger.info("Updated style node: {} (exactlyId: {})", existingStyle.getPath(), exactlyId);
-                return existingStyle;
-            }
-            
-            // Create new style
-            String nodeName = JCRContentUtils.generateNodeName(name != null ? name : exactlyId, 32);
-            
-            // Check if node with this name already exists
-            if (stylesFolder.hasNode(nodeName)) {
-                Node existingNode = stylesFolder.getNode(nodeName);
-                // Update the existing node with the new exactlyId and data
-                existingNode.setProperty("eximg:exactlyId", exactlyId);
-                if (name != null) {
-                    existingNode.setProperty("eximg:name", name);
-                    existingNode.setProperty("jcr:title", name);
-                }
-                if (status != null && !status.trim().isEmpty()) {
-                    existingNode.setProperty("eximg:status", status);
-                }
-                if (active != null) {
-                    existingNode.setProperty("eximg:active", active);
-                }
-                if (metadata != null) {
-                    existingNode.setProperty("eximg:metadata", metadata);
-                }
-                if (description != null) {
-                    existingNode.setProperty("eximg:description", description);
-                }
-                existingNode.setProperty("eximg:lastSynced", Calendar.getInstance());
-                session.save();
-                logger.info("Updated existing node by name: {} (exactlyId: {})", existingNode.getPath(), exactlyId);
-                return existingNode;
-            }
-            
-            // Create new node
-            Node styleNode = stylesFolder.addNode(nodeName, STYLE_NODE_TYPE);
-            styleNode.setProperty("eximg:exactlyId", exactlyId);
-            if (name != null) {
-                styleNode.setProperty("eximg:name", name);
-                styleNode.setProperty("jcr:title", name);
-            }
-            if (status != null && !status.trim().isEmpty()) {
-                styleNode.setProperty("eximg:status", status);
-            }
-            if (active != null) {
-                styleNode.setProperty("eximg:active", active);
-            }
-            if (metadata != null) {
-                styleNode.setProperty("eximg:metadata", metadata);
-            }
-            if (description != null) {
-                styleNode.setProperty("eximg:description", description);
-            }
-            styleNode.setProperty("eximg:lastSynced", Calendar.getInstance());
-            
-            session.save();
-            logger.info("Created style node: {} (exactlyId: {})", styleNode.getPath(), exactlyId);
-            return styleNode;
-        });
+
+    private static final String PROP_EXACTLY_ID = "eximg:exactlyId";
+    /** Values the CND choicelist of {@code eximg:status} accepts; anything else Exactly sends is stored as unknown. */
+    private static final Set<String> KNOWN_STATUSES = new HashSet<>(Arrays.asList("unknown", "draft", "active", "training", "ready", "failed"));
+
+    /** Values of a style as read from Exactly; {@code null} fields are left unchanged. */
+    public static final class StyleData {
+        final String exactlyId;
+        final String name;
+        final String status;
+        final Boolean active;
+        final String metadata;
+        final String description;
+
+        public StyleData(String exactlyId, String name, String status, Boolean active, String metadata, String description) {
+            this.exactlyId = exactlyId;
+            this.name = name;
+            this.status = status;
+            this.active = active;
+            this.metadata = metadata;
+            this.description = description;
+        }
     }
-    
+
     /**
-     * Update style node
+     * Creates or updates the style node of an Exactly model, matched on its Exactly id within the site.
+     *
+     * @param session the caller's session
+     * @param site    the site, already checked
+     * @param data    the style values
+     * @return the style node
+     * @throws RepositoryException when the caller may not write the folder, or on a repository error
      */
-    public Node updateStyle(String uuid, String name, String status, Boolean active, String metadata, String description) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node styleNode = session.getNodeByIdentifier(uuid);
-            
-            if (name != null) {
-                styleNode.setProperty("eximg:name", name);
-            }
-            if (status != null) {
-                styleNode.setProperty("eximg:status", status);
-            }
-            if (active != null) {
-                styleNode.setProperty("eximg:active", active);
-            }
-            if (metadata != null) {
-                styleNode.setProperty("eximg:metadata", metadata);
-            }
-            if (description != null) {
-                styleNode.setProperty("eximg:description", description);
-            }
-            styleNode.setProperty("eximg:lastSynced", Calendar.getInstance());
-            
-            session.save();
-            logger.info("Updated style node: {}", styleNode.getPath());
-            return styleNode;
-        });
+    public JCRNodeWrapper saveStyle(JCRSessionWrapper session, JCRSiteNode site, StyleData data) throws RepositoryException {
+        ExactlyAccessService.requireExternalId(data.exactlyId);
+        JCRNodeWrapper folder = ensureStylesFolder(session, site);
+        JCRNodeWrapper style = findByExactlyId(folder, data.exactlyId);
+        if (style == null) {
+            String nodeName = JCRContentUtils.findAvailableNodeName(folder,
+                    JCRContentUtils.generateNodeName(data.name != null ? data.name : data.exactlyId, 32));
+            style = folder.addNode(nodeName, ExactlyAccessService.STYLE_NODE_TYPE);
+            style.setProperty(PROP_EXACTLY_ID, data.exactlyId);
+        }
+        apply(style, data);
+        session.save();
+        logger.debug("Saved style {} (exactlyId {})", style.getPath(), data.exactlyId);
+        return style;
     }
-    
+
     /**
-     * Get style by UUID
+     * @param style a style node
+     * @return its Exactly id, validated, or {@code null} when it has none
+     * @throws RepositoryException on a repository error
      */
-    public Node getStyleByUuid(String uuid) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            return session.getNodeByIdentifier(uuid);
-        });
-    }
-    
-    /**
-     * Get Exactly ID from style node
-     */
-    public String getExactlyId(String uuid) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node styleNode = session.getNodeByIdentifier(uuid);
-            return styleNode.hasProperty("eximg:exactlyId") ? 
-                   styleNode.getProperty("eximg:exactlyId").getString() : null;
-        });
-    }
-    
-    /**
-     * Delete style node
-     */
-    public void deleteStyle(String uuid) throws RepositoryException {
-        JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node styleNode = session.getNodeByIdentifier(uuid);
-            String path = styleNode.getPath();
-            styleNode.remove();
-            session.save();
-            logger.info("Deleted style node: {}", path);
+    public String getExactlyId(JCRNodeWrapper style) throws RepositoryException {
+        if (!style.hasProperty(PROP_EXACTLY_ID)) {
             return null;
-        });
+        }
+        String id = style.getProperty(PROP_EXACTLY_ID).getString();
+        return id.isEmpty() ? null : ExactlyAccessService.requireExternalId(id);
     }
-    
+
     /**
-     * List all styles
+     * Updates the status of a style.
+     *
+     * @param style  the style node, already checked for write
+     * @param status the new status
+     * @throws RepositoryException on a repository error
      */
-    public List<Node> listAllStyles(String siteKey) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            List<Node> styles = new ArrayList<>();
-            Node stylesFolder = ensureStylesFolder(session, siteKey);
-            
-            NodeIterator nodes = stylesFolder.getNodes();
-            while (nodes.hasNext()) {
-                Node node = nodes.nextNode();
-                if (node.isNodeType(STYLE_NODE_TYPE)) {
-                    styles.add(node);
-                }
+    public void updateStatus(JCRNodeWrapper style, String status) throws RepositoryException {
+        if (status != null && !status.trim().isEmpty()) {
+            style.setProperty("eximg:status", normalizeStatus(status));
+            style.setProperty("eximg:lastSynced", Calendar.getInstance());
+            style.getSession().save();
+        }
+    }
+
+    /**
+     * Removes the style nodes of a site whose Exactly id is not in the given set, after a sync read
+     * the whole account. Nodes without an Exactly id are kept.
+     *
+     * @param session    the caller's session
+     * @param site       the site, already checked for write
+     * @param accountIds the ids of every model on the account
+     * @return the number of nodes removed
+     * @throws RepositoryException on a repository error
+     */
+    public int removeStylesNotIn(JCRSessionWrapper session, JCRSiteNode site, Set<String> accountIds) throws RepositoryException {
+        String path = ExactlyAccessService.stylesFolderPath(site);
+        if (!session.nodeExists(path)) {
+            return 0;
+        }
+        List<JCRNodeWrapper> stale = new ArrayList<>();
+        JCRNodeIteratorWrapper children = session.getNode(path).getNodes();
+        while (children.hasNext()) {
+            JCRNodeWrapper child = (JCRNodeWrapper) children.nextNode();
+            if (child.isNodeType(ExactlyAccessService.STYLE_NODE_TYPE) && child.hasProperty(PROP_EXACTLY_ID)
+                    && !accountIds.contains(child.getProperty(PROP_EXACTLY_ID).getString())) {
+                stale.add(child);
             }
-            
-            return styles;
-        });
+        }
+        for (JCRNodeWrapper style : stale) {
+            logger.info("Removing style {}: its model is not on Exactly.ai any more", style.getPath());
+            style.remove();
+        }
+        if (!stale.isEmpty()) {
+            session.save();
+        }
+        return stale.size();
     }
-    
-    private String getStylesFolderPath(String siteKey) {
-        return "/sites/" + siteKey + "/contents/" + STYLES_FOLDER_NAME;
+
+    /**
+     * Removes a style node.
+     *
+     * @param style the style node, already checked for write
+     * @throws RepositoryException on a repository error
+     */
+    public void deleteStyle(JCRNodeWrapper style) throws RepositoryException {
+        JCRSessionWrapper session = style.getSession();
+        style.remove();
+        session.save();
     }
-    
-    private Node findStyleByExactlyId(JCRSessionWrapper session, String siteKey, String exactlyId) throws RepositoryException {
-        QueryManager queryManager = session.getWorkspace().getQueryManager();
-        String queryString = "SELECT * FROM [eximgynt:style] WHERE [eximg:exactlyId] = '" + exactlyId + "'";
-        Query query = queryManager.createQuery(queryString, Query.JCR_SQL2);
-        QueryResult result = query.execute();
-        
-        NodeIterator nodes = result.getNodes();
-        if (nodes.hasNext()) {
-            return nodes.nextNode();
+
+    private static void apply(JCRNodeWrapper style, StyleData data) throws RepositoryException {
+        if (data.name != null) {
+            style.setProperty("eximg:name", data.name);
+            style.setProperty("jcr:title", data.name);
+        }
+        if (data.status != null && !data.status.trim().isEmpty()) {
+            style.setProperty("eximg:status", normalizeStatus(data.status));
+        }
+        if (data.active != null) {
+            style.setProperty("eximg:active", data.active);
+        }
+        if (data.metadata != null) {
+            style.setProperty("eximg:metadata", data.metadata);
+        }
+        if (data.description != null) {
+            style.setProperty("eximg:description", data.description);
+        }
+        style.setProperty("eximg:lastSynced", Calendar.getInstance());
+    }
+
+    private static String normalizeStatus(String status) {
+        String value = status.trim().toLowerCase(Locale.ROOT);
+        if ("canceled".equals(value) || "cancelled".equals(value)) {
+            return "draft";
+        }
+        return KNOWN_STATUSES.contains(value) ? value : "unknown";
+    }
+
+    /** A site holds a handful of styles: one pass over the folder, no query to build. */
+    private static JCRNodeWrapper findByExactlyId(JCRNodeWrapper folder, String exactlyId) throws RepositoryException {
+        JCRNodeIteratorWrapper children = folder.getNodes();
+        while (children.hasNext()) {
+            JCRNodeWrapper child = (JCRNodeWrapper) children.nextNode();
+            if (child.isNodeType(ExactlyAccessService.STYLE_NODE_TYPE) && child.hasProperty(PROP_EXACTLY_ID)
+                    && exactlyId.equals(child.getProperty(PROP_EXACTLY_ID).getString())) {
+                return child;
+            }
         }
         return null;
     }
-    
-    private Node ensureStylesFolder(JCRSessionWrapper session, String siteKey) throws RepositoryException {
-        String stylesFolderPath = getStylesFolderPath(siteKey);
-        if (!session.nodeExists(stylesFolderPath)) {
-            String[] pathParts = stylesFolderPath.substring(1).split("/");
-            Node current = session.getNode("/");
-            
-            for (String part : pathParts) {
-                if (!current.hasNode(part)) {
-                    current = current.addNode(part, "jnt:contentFolder");
-                } else {
-                    current = current.getNode(part);
-                }
-            }
-            session.save();
+
+    private static JCRNodeWrapper ensureStylesFolder(JCRSessionWrapper session, JCRSiteNode site) throws RepositoryException {
+        String path = ExactlyAccessService.stylesFolderPath(site);
+        JCRNodeWrapper folder;
+        if (session.nodeExists(path)) {
+            folder = session.getNode(path);
+        } else {
+            JCRNodeWrapper contents = session.getNode(site.getPath() + "/contents");
+            folder = contents.addNode(ExactlyAccessService.STYLES_FOLDER_NAME, "jnt:contentFolder");
         }
-        Node folder = session.getNode(stylesFolderPath);
-        
-        // Add mixin to allow eximgynt:style children
         if (!folder.isNodeType("eximgmix:exactlyContainer")) {
             folder.addMixin("eximgmix:exactlyContainer");
-            session.save();
         }
-        
         return folder;
     }
 }
