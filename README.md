@@ -10,7 +10,7 @@ library.
 - **Where:** jContent, *Additional* accordion, *Exactly.ai Image Generator*, on sites that enable
   the module.
 
-**Latest release:** [1.1.0](https://github.com/smonier/exactlyImageGenerator/releases/tag/exactlyImageGenerator-1.1.0) (2026-10-24), see the [changelog](CHANGELOG.md).
+**Latest release:** [1.1.1](https://github.com/smonier/exactlyImageGenerator/releases/tag/exactlyImageGenerator-1.1.1) (2026-10-24), see the [changelog](CHANGELOG.md).
 
 ## Screenshots
 
