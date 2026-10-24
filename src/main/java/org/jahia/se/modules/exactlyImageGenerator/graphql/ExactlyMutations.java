@@ -53,9 +53,13 @@ public class ExactlyMutations extends ExactlyOperations {
             for (Map<String, Object> model : models) {
                 String metadata = (String) model.get("metadata");
                 try {
-                    styleRepository.saveStyle(session, site, new JcrStyleRepository.StyleData(
+                    JCRNodeWrapper style = styleRepository.saveStyle(session, site, new JcrStyleRepository.StyleData(
                             (String) model.get("uid"), (String) model.get("name"), (String) model.get("status"),
                             (Boolean) model.get("active"), metadata, descriptionOf(metadata)));
+                    // Thumbnails are made once, then kept: the list shows them without calling Exactly
+                    if (!styleRepository.hasThumbnail(style)) {
+                        styleRepository.setThumbnail(style, exactlyService.thumbnailDataUrl((String) model.get("uid")));
+                    }
                 } catch (IllegalArgumentException | javax.jcr.RepositoryException e) {
                     // One model the site cannot store must not stop the others
                     session.refresh(false);
@@ -126,7 +130,11 @@ public class ExactlyMutations extends ExactlyOperations {
     public ExactlySyncResponse deleteTrainingImage(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid,
                                                    @GraphQLName("imageUid") @GraphQLNonNull String imageUid) {
         return run("deleteTrainingImage", () -> {
-            exactlyService.deleteTrainingImage(requireExactlyId(styleUuid), imageUid);
+            JCRNodeWrapper style = access.requireStyle(access.userSession(), styleUuid, true);
+            String exactlyId = exactlyIdOf(style);
+            exactlyService.deleteTrainingImage(exactlyId, imageUid);
+            // The deleted image may have been the one of the thumbnail
+            styleRepository.setThumbnail(style, exactlyService.thumbnailDataUrl(exactlyId));
             return success("Image deleted");
         });
     }
@@ -159,6 +167,9 @@ public class ExactlyMutations extends ExactlyOperations {
                 return failure("Nothing was sent. " + String.join("; ", refused));
             }
             Map<String, Object> result = exactlyService.uploadTrainingImages(exactlyId, images);
+            if (!styleRepository.hasThumbnail(style)) {
+                styleRepository.setThumbnail(style, exactlyService.thumbnailDataUrl(exactlyId));
+            }
             String message = (String) result.get("message");
             if (result.get("errors") != null) {
                 message += " - " + result.get("errors");
@@ -287,9 +298,6 @@ public class ExactlyMutations extends ExactlyOperations {
         });
     }
 
-    private String requireExactlyId(String styleUuid) throws Exception {
-        return exactlyIdOf(access.requireStyle(access.userSession(), styleUuid, true));
-    }
 
     private String exactlyIdOf(JCRNodeWrapper style) throws Exception {
         String exactlyId = styleRepository.getExactlyId(style);

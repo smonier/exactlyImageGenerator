@@ -24,6 +24,7 @@ export const STYLES = gql`
                         status: property(name: "eximg:status") { value }
                         description: property(name: "eximg:description") { value }
                         lastSynced: property(name: "eximg:lastSynced") { value }
+                        thumbnail: property(name: "eximg:thumbnail") { value }
                     }
                 }
             }

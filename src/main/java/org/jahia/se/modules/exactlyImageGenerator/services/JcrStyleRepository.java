@@ -32,6 +32,7 @@ public class JcrStyleRepository {
     private static final Logger logger = LoggerFactory.getLogger(JcrStyleRepository.class);
 
     private static final String PROP_EXACTLY_ID = "eximg:exactlyId";
+    private static final String PROP_THUMBNAIL = "eximg:thumbnail";
     /** Values the CND choicelist of {@code eximg:status} accepts; anything else Exactly sends is stored as unknown. */
     private static final Set<String> KNOWN_STATUSES = new HashSet<>(Arrays.asList("unknown", "draft", "active", "training", "ready", "failed"));
 
@@ -90,6 +91,33 @@ public class JcrStyleRepository {
         }
         String id = style.getProperty(PROP_EXACTLY_ID).getString();
         return id.isEmpty() ? null : ExactlyAccessService.requireExternalId(id);
+    }
+
+    /**
+     * @param style a style node
+     * @return whether it holds a cached thumbnail
+     * @throws RepositoryException on a repository error
+     */
+    public boolean hasThumbnail(JCRNodeWrapper style) throws RepositoryException {
+        return style.hasProperty(PROP_THUMBNAIL);
+    }
+
+    /**
+     * Stores or clears the cached thumbnail of a style and saves.
+     *
+     * @param style   the style node, already checked for write
+     * @param dataUrl a {@code data:image/jpeg;base64,...} URL, or {@code null} to clear it
+     * @throws RepositoryException on a repository error
+     */
+    public void setThumbnail(JCRNodeWrapper style, String dataUrl) throws RepositoryException {
+        if (dataUrl != null) {
+            style.setProperty(PROP_THUMBNAIL, dataUrl);
+        } else if (style.hasProperty(PROP_THUMBNAIL)) {
+            style.getProperty(PROP_THUMBNAIL).remove();
+        } else {
+            return;
+        }
+        style.getSession().save();
     }
 
     /**

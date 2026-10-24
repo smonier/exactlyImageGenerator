@@ -33,7 +33,8 @@ const toStyle = node => ({
     exactlyId: node.exactlyId?.value,
     status: node.status?.value || STATUS.UNKNOWN,
     description: node.description?.value || '',
-    lastSynced: node.lastSynced?.value
+    lastSynced: node.lastSynced?.value,
+    thumbnail: node.thumbnail?.value
 });
 
 /** Step 1: the styles (Exactly models) of the site; pick one to train or generate with. */
@@ -128,7 +129,7 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
             width: '34%',
             render: ({data: row}) => (
                 <div className={classes.styleCell}>
-                    <StylePreview styleUuid={row.uuid} name={row.name}/>
+                    <StylePreview styleUuid={row.uuid} name={row.name} thumbnail={row.thumbnail}/>
                     <div className={classes.cellText}>
                         <Typography weight="semiBold">{row.name}</Typography>
                         {row.description && <Typography variant="caption">{row.description}</Typography>}

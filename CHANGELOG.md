@@ -3,7 +3,7 @@
 ## 1.1.1 (unreleased)
 
 - The screens use the full width of jContent, with the same margin on both sides (they stopped at 1200 px).
-- The styles list shows each style's first training image, so you can see what a style looks like (an icon when it has none yet), and dates in a short format.
+- The styles list shows a thumbnail of each style (its first training image), so you can see what a style looks like, and dates in a short format. Thumbnails are made once at sync (160 px, a few kB, kept on the style node) and refreshed when training images change, so opening the list no longer downloads anything from Exactly.ai.
 - Form fields no longer repeat their control's id (the label container had the same id), which screen readers and tests tripped on.
 - Generated images keep their own ratio in the results instead of a letterboxed square.
 - The file name example in the Generation step reads `red-bicycle.jpg`.

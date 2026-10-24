@@ -18,6 +18,7 @@
  - eximg:lastSynced (date)
  - eximg:metadata (string, textarea) indexed=no
  - eximg:params (string, textarea) indexed=no
+ - eximg:thumbnail (string) indexed=no hidden
 
 //------------------------------------------------------------------------------
 // Mixin to allow Exactly.ai content as children

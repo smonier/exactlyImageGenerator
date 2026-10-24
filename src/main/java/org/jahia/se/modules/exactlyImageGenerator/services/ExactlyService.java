@@ -10,6 +10,12 @@ import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.imageio.ImageIO;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.util.*;
 
 /**
@@ -420,6 +426,50 @@ public class ExactlyService {
         return result;
     }
     
+    /** Side of the style thumbnails (px), square. */
+    static final int THUMBNAIL_SIZE = 160;
+
+    /**
+     * Thumbnail of a style: its first training image, center-cropped and scaled to a
+     * {@value #THUMBNAIL_SIZE} px square JPEG, as a {@code data:} URL small enough to keep on the style
+     * node (a few kB). One API call and one download.
+     *
+     * @param styleId Exactly model id
+     * @return the data URL, or {@code null} when the style has no training image or it cannot be read
+     */
+    public String thumbnailDataUrl(String styleId) {
+        try {
+            for (Map<String, Object> image : getTrainingImages(styleId)) {
+                Object url = image.get("url");
+                if (url instanceof String && ((String) url).startsWith("https://")) {
+                    BufferedImage source = ImageIO.read(new ByteArrayInputStream(proxyClient.download((String) url).getData()));
+                    return source == null ? null : "data:image/jpeg;base64," + Base64.getEncoder().encodeToString(squareJpeg(source));
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("No thumbnail for model {}: {}", styleId, e.getMessage());
+        }
+        return null;
+    }
+
+    private static byte[] squareJpeg(BufferedImage source) throws java.io.IOException {
+        int side = Math.min(source.getWidth(), source.getHeight());
+        BufferedImage target = new BufferedImage(THUMBNAIL_SIZE, THUMBNAIL_SIZE, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = target.createGraphics();
+        try {
+            g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+            int x = (source.getWidth() - side) / 2;
+            int y = (source.getHeight() - side) / 2;
+            g.drawImage(source, 0, 0, THUMBNAIL_SIZE, THUMBNAIL_SIZE, x, y, x + side, y + side, null);
+        } finally {
+            g.dispose();
+        }
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        ImageIO.write(target, "jpg", out);
+        return out.toByteArray();
+    }
+
     /**
      * Downloads an image URL that the API returned for a generation (see {@link GeneratedImageRegistry}).
      *
