@@ -99,6 +99,10 @@ const ExactlySite = ({siteKey, language, uilang}) => {
                                            onSelect={selected => {
                                                selectStyle(selected);
                                                changeTab(selected.status === STATUS.READY ? 'generate' : 'training');
+                                           }}
+                                           onOpenTraining={selected => {
+                                               selectStyle(selected);
+                                               changeTab('training');
                                            }}/>
                             )}
                             {tab === 'training' && style && (

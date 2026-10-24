@@ -10,9 +10,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.jcr.RepositoryException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
@@ -103,6 +105,40 @@ public class JcrStyleRepository {
             style.setProperty("eximg:lastSynced", Calendar.getInstance());
             style.getSession().save();
         }
+    }
+
+    /**
+     * Removes the style nodes of a site whose Exactly id is not in the given set, after a sync read
+     * the whole account. Nodes without an Exactly id are kept.
+     *
+     * @param session    the caller's session
+     * @param site       the site, already checked for write
+     * @param accountIds the ids of every model on the account
+     * @return the number of nodes removed
+     * @throws RepositoryException on a repository error
+     */
+    public int removeStylesNotIn(JCRSessionWrapper session, JCRSiteNode site, Set<String> accountIds) throws RepositoryException {
+        String path = ExactlyAccessService.stylesFolderPath(site);
+        if (!session.nodeExists(path)) {
+            return 0;
+        }
+        List<JCRNodeWrapper> stale = new ArrayList<>();
+        JCRNodeIteratorWrapper children = session.getNode(path).getNodes();
+        while (children.hasNext()) {
+            JCRNodeWrapper child = (JCRNodeWrapper) children.nextNode();
+            if (child.isNodeType(ExactlyAccessService.STYLE_NODE_TYPE) && child.hasProperty(PROP_EXACTLY_ID)
+                    && !accountIds.contains(child.getProperty(PROP_EXACTLY_ID).getString())) {
+                stale.add(child);
+            }
+        }
+        for (JCRNodeWrapper style : stale) {
+            logger.info("Removing style {}: its model is not on Exactly.ai any more", style.getPath());
+            style.remove();
+        }
+        if (!stale.isEmpty()) {
+            session.save();
+        }
+        return stale.size();
     }
 
     /**

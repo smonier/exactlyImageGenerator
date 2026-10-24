@@ -61,6 +61,12 @@ public class ExactlyMutations extends ExactlyOperations {
                     failed.add(String.valueOf(model.get("name")));
                 }
             }
+            Set<String> accountIds = new LinkedHashSet<>();
+            for (Map<String, Object> model : models) {
+                accountIds.add((String) model.get("uid"));
+            }
+            // Styles whose model was deleted on Exactly.ai are removed: the list mirrors the account
+            styleRepository.removeStylesNotIn(session, site, accountIds);
             if (failed.isEmpty()) {
                 return success("Synced " + models.size() + " styles");
             }
@@ -97,7 +103,15 @@ public class ExactlyMutations extends ExactlyOperations {
             JCRNodeWrapper style = access.requireStyle(access.userSession(), styleUuid, true);
             String exactlyId = styleRepository.getExactlyId(style);
             if (exactlyId != null) {
-                exactlyService.deleteStyle(exactlyId);
+                try {
+                    exactlyService.deleteStyle(exactlyId);
+                } catch (java.io.IOException e) {
+                    // A model already gone from the account must not keep its style node forever
+                    if (!isUnknownModel(e)) {
+                        throw e;
+                    }
+                    logger.info("Model {} is not on Exactly.ai any more: removing its style only", exactlyId);
+                }
             }
             styleRepository.deleteStyle(style);
             return success("Style deleted");
@@ -262,6 +276,12 @@ public class ExactlyMutations extends ExactlyOperations {
             throw new IllegalArgumentException("Style not synced with Exactly.ai");
         }
         return exactlyId;
+    }
+
+    /** Exactly answers 404 for an unknown model and 422 for an id that is not a UUID. */
+    private static boolean isUnknownModel(java.io.IOException e) {
+        String message = e.getMessage();
+        return message != null && (message.startsWith("API call failed: 404") || message.startsWith("API call failed: 422"));
     }
 
     private static String descriptionOf(String metadata) {

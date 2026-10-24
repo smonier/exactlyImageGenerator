@@ -24,7 +24,9 @@
   completes. Thumbnails and fetches respect the context path. EN and FR.
 - Reads (`trainingImages`, `trainingProgress`, `model`, `configured`) moved to `Query.exactly`;
   `saveGeneratedImagesToDam` is replaced by `saveGeneratedImages(generationId, indices, ...)`.
-- Style sync matches styles by Exactly id within the site, keeps going when one model fails, and maps
-  statuses the CND does not know.
+- Style sync matches styles by Exactly id within the site, keeps going when one model fails, maps
+  statuses the CND does not know, and removes styles whose model is no longer on the account.
+- Deleting a style whose model is already gone from Exactly.ai removes the style instead of failing.
+- Each style row has a *Training images* button that opens its training images, ready styles included.
 - Build: Node 22, Jahia archive repositories, `target/` no longer tracked; dead code, unused
   dependencies and obsolete documents removed; French labels for the content types.

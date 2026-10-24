@@ -55,6 +55,8 @@
     "deleteFailed": "The style could not be deleted: {{message}}",
     "select": "Select",
     "selected": "Selected",
+    "viewTraining": "Training images",
+    "viewTrainingOf": "Training images of {{name}}",
     "emptyTitle": "No style yet",
     "empty": "Sync from Exactly.ai to list the models of your account, or create a new style.",
     "columns": {

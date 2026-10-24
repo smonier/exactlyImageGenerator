@@ -55,6 +55,8 @@
     "deleteFailed": "Le style n'a pas pu être supprimé : {{message}}",
     "select": "Sélectionner",
     "selected": "Sélectionné",
+    "viewTraining": "Images d'entraînement",
+    "viewTrainingOf": "Images d'entraînement de {{name}}",
     "emptyTitle": "Aucun style",
     "empty": "Synchronisez depuis Exactly.ai pour lister les modèles de votre compte, ou créez un style.",
     "columns": {

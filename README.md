@@ -17,7 +17,9 @@ The app has three steps, shown as tabs in its header:
 1. **Style.** The styles of the site, synchronized from the models of the Exactly.ai account
    (*Sync from Exactly.ai*; the app also syncs once when it opens). Create a style with *New
    style*, delete one with the bin (the model is deleted on Exactly.ai too). *Select* opens the
-   next step.
+   next step; *Training images* opens a style's training images whatever its status. Sync removes
+   styles whose model was deleted on the account, and deleting a style whose model is already gone
+   removes it locally.
 2. **Training.** The training images already on Exactly.ai, and *Pick images* to choose images of
    the site's media library and send them. Exactly.ai asks for at least 10 images, 1024 px or more
    on their shortest side. *Start training* runs the training; the page follows its progress and

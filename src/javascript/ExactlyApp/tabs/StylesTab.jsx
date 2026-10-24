@@ -14,6 +14,7 @@ import {
     ModalBody,
     ModalFooter,
     ModalHeader,
+    PhotoLibrary,
     Reload,
     Textarea,
     Typography
@@ -35,7 +36,7 @@ const toStyle = node => ({
 });
 
 /** Step 1: the styles (Exactly models) of the site; pick one to train or generate with. */
-const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onError, notify}) => {
+const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTraining, onError, notify}) => {
     const {t} = useTranslation(NS);
     const [createOpen, setCreateOpen] = useState(false);
     const [newName, setNewName] = useState('');
@@ -118,7 +119,7 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onError, n
         {
             key: 'name',
             label: t('styles.columns.name'),
-            width: '40%',
+            width: '32%',
             render: ({data: row}) => (
                 <div className={classes.cellText}>
                     <Typography weight="semiBold">{row.name}</Typography>
@@ -141,10 +142,20 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onError, n
         {
             key: 'uuid',
             label: t('styles.columns.actions'),
-            width: '25%',
+            width: '33%',
             align: 'right',
             render: ({data: row}) => (
                 <div className={classes.cellActions}>
+                    <Button
+                        icon={<PhotoLibrary/>}
+                        variant="ghost"
+                        label={t('styles.viewTraining')}
+                        aria-label={t('styles.viewTrainingOf', {name: row.name})}
+                        onClick={e => {
+                            e.stopPropagation();
+                            onOpenTraining(row);
+                        }}
+                    />
                     <Button
                         label={style?.uuid === row.uuid ? t('styles.selected') : t('styles.select')}
                         color="accent"
