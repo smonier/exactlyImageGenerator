@@ -142,10 +142,19 @@ public class ExactlyMutations extends ExactlyOperations {
             JCRSessionWrapper session = access.userSession();
             JCRNodeWrapper style = access.requireStyle(session, styleUuid, true);
             String exactlyId = exactlyIdOf(style);
-            // Read every image first, with the caller's session: one refused image refuses the whole call
+            // Read and check every image first, with the caller's session: nothing is sent while one is
+            // refused, and the answer names every refused image at once
             List<DamService.DamImage> images = new ArrayList<>();
+            List<String> refused = new ArrayList<>();
             for (String uuid : uuids) {
-                images.add(damService.readImage(session, uuid));
+                try {
+                    images.add(damService.readImage(session, uuid));
+                } catch (IllegalArgumentException e) {
+                    refused.add(e.getMessage());
+                }
+            }
+            if (!refused.isEmpty()) {
+                return failure("Nothing was sent. " + String.join("; ", refused));
             }
             Map<String, Object> result = exactlyService.uploadTrainingImages(exactlyId, images);
             String message = (String) result.get("message");

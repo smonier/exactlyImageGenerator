@@ -23,7 +23,8 @@ The app has three steps, shown as tabs in its header:
    removes it locally.
 2. **Training.** The training images already on Exactly.ai, and *Pick images* to choose images of
    the site's media library and send them. Exactly.ai asks for at least 10 images, 1024 px or more
-   on their shortest side. *Start training* runs the training; the page follows its progress and
+   on their shortest side; smaller images are refused before anything is sent, each named with its
+   size. *Start training* runs the training; the page follows its progress and
    unlocks the third step when the style is ready. *Back to draft* reopens a trained style.
 3. **Generation.** A prompt, the number of images (1 to 4), the aspect ratio, and optional
    reference images from the media library (2.5 MB at most each). Select the results to keep, choose

@@ -10,12 +10,16 @@ import org.osgi.service.component.annotations.Component;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
 import javax.jcr.Binary;
 import javax.jcr.ItemNotFoundException;
 import javax.jcr.RepositoryException;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Iterator;
 
 /**
  * Reads images from and writes images to a site's media library (DAM), always with the caller's own
@@ -27,6 +31,8 @@ public class DamService {
 
     private static final Logger logger = LoggerFactory.getLogger(DamService.class);
 
+    /** Shortest side Exactly.ai accepts for a training image (px). */
+    public static final int MIN_TRAINING_IMAGE_SIDE = 1024;
     /** Largest DAM image the module sends to Exactly (bytes). */
     static final long MAX_TRAINING_IMAGE_BYTES = 20L * 1024 * 1024;
     /** Folder created under the site's files when the caller picks no folder. */
@@ -61,7 +67,8 @@ public class DamService {
      * @return the file name and content
      * @throws AccessDeniedException     when the node is unknown or unreadable by the caller
      * @throws IllegalArgumentException  when it is not an image file or is larger than
-     *                                   {@value #MAX_TRAINING_IMAGE_BYTES} bytes (the message names the file)
+     *                                   {@value #MAX_TRAINING_IMAGE_BYTES} bytes, or smaller than
+     *                                   {@value #MIN_TRAINING_IMAGE_SIDE} px on its shortest side (the message names the file)
      * @throws RepositoryException       on a repository error
      * @throws IOException               when the binary cannot be read
      */
@@ -87,12 +94,81 @@ public class DamService {
             if (binary.getSize() > MAX_TRAINING_IMAGE_BYTES) {
                 throw new IllegalArgumentException(name + " is larger than " + (MAX_TRAINING_IMAGE_BYTES / (1024 * 1024)) + " MB");
             }
+            byte[] data;
             try (InputStream in = binary.getStream()) {
-                return new DamImage(name, IOUtils.toByteArray(in));
+                data = IOUtils.toByteArray(in);
             }
+            int[] size = dimensions(file, data);
+            if (size != null && Math.min(size[0], size[1]) < MIN_TRAINING_IMAGE_SIDE) {
+                throw new IllegalArgumentException(name + " is " + size[0] + " x " + size[1]
+                        + " px, Exactly.ai needs at least " + MIN_TRAINING_IMAGE_SIDE + " px on the shortest side");
+            }
+            return new DamImage(name, data);
         } finally {
             binary.dispose();
         }
+    }
+
+    /**
+     * Width and height of an image: Jahia's {@code j:width}/{@code j:height} when the file has them,
+     * else read from the image itself (JPEG, PNG, GIF, BMP through the JDK, WebP from its header).
+     *
+     * @return {width, height}, or {@code null} when the size cannot be read (Exactly.ai then decides)
+     */
+    static int[] dimensions(JCRNodeWrapper file, byte[] data) throws RepositoryException {
+        if (file.hasProperty("j:width") && file.hasProperty("j:height")) {
+            return new int[]{(int) file.getProperty("j:width").getLong(), (int) file.getProperty("j:height").getLong()};
+        }
+        int[] webp = webpDimensions(data);
+        if (webp != null) {
+            return webp;
+        }
+        try (ImageInputStream in = ImageIO.createImageInputStream(new ByteArrayInputStream(data))) {
+            Iterator<ImageReader> readers = in != null ? ImageIO.getImageReaders(in) : null;
+            if (readers != null && readers.hasNext()) {
+                ImageReader reader = readers.next();
+                try {
+                    reader.setInput(in);
+                    return new int[]{reader.getWidth(0), reader.getHeight(0)};
+                } finally {
+                    reader.dispose();
+                }
+            }
+        } catch (IOException e) {
+            logger.debug("Cannot read the size of {}", file.getPath(), e);
+        }
+        return null;
+    }
+
+    /** Size from a WebP header (RIFF/WEBP with a VP8, VP8L or VP8X chunk), or {@code null}. */
+    static int[] webpDimensions(byte[] d) {
+        if (d.length < 30 || !"RIFF".equals(ascii(d, 0)) || !"WEBP".equals(ascii(d, 8))) {
+            return null;
+        }
+        String chunk = ascii(d, 12);
+        switch (chunk) {
+            case "VP8X":
+                return new int[]{1 + u24(d, 24), 1 + u24(d, 27)};
+            case "VP8L":
+                int bits = (d[21] & 0xff) | (d[22] & 0xff) << 8 | (d[23] & 0xff) << 16 | (d[24] & 0xff) << 24;
+                return new int[]{1 + (bits & 0x3fff), 1 + ((bits >>> 14) & 0x3fff)};
+            case "VP8 ":
+                return new int[]{u16(d, 26) & 0x3fff, u16(d, 28) & 0x3fff};
+            default:
+                return null;
+        }
+    }
+
+    private static String ascii(byte[] d, int offset) {
+        return new String(d, offset, 4, java.nio.charset.StandardCharsets.US_ASCII);
+    }
+
+    private static int u16(byte[] d, int offset) {
+        return (d[offset] & 0xff) | (d[offset + 1] & 0xff) << 8;
+    }
+
+    private static int u24(byte[] d, int offset) {
+        return (d[offset] & 0xff) | (d[offset + 1] & 0xff) << 8 | (d[offset + 2] & 0xff) << 16;
     }
 
     /**

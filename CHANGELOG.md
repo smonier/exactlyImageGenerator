@@ -31,5 +31,7 @@
 - A style in training shows its progress in the styles table, and the list resyncs when it ends.
 - Training images can come from any media library the user can read (another site, shared media);
   a refused file is named with the reason (not an image, larger than 20 MB, Exactly's message).
+- Images under 1024 px on their shortest side are refused before anything is sent, all of them named
+  with their size in one message.
 - Build: Node 22, Jahia archive repositories, `target/` no longer tracked; dead code, unused
   dependencies and obsolete documents removed; French labels for the content types.
