@@ -1,192 +1,150 @@
 package org.jahia.se.modules.exactlyImageGenerator.services;
 
 import org.apache.commons.io.IOUtils;
-import org.jahia.services.content.*;
+import org.jahia.services.content.JCRContentUtils;
+import org.jahia.services.content.JCRNodeWrapper;
+import org.jahia.services.content.JCRSessionWrapper;
+import org.jahia.services.content.decorator.JCRSiteNode;
+import org.jahia.se.modules.exactlyImageGenerator.services.ExactlyAccessService.AccessDeniedException;
 import org.osgi.service.component.annotations.Component;
-import org.osgi.service.component.annotations.Reference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.jcr.Node;
-import javax.jcr.RepositoryException;
 import javax.jcr.Binary;
+import javax.jcr.ItemNotFoundException;
+import javax.jcr.RepositoryException;
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.io.InputStream;
-import java.util.Calendar;
 
 /**
- * Service for DAM operations - reading and creating assets
+ * Reads images from and writes images to a site's media library (DAM), always with the caller's own
+ * session: a caller can only send images they can read and only save into folders they can write.
+ * Every node is pinned to its type and to the site's {@code files} tree. Stateless and thread-safe.
  */
-@Component(service = DamService.class, immediate = true)
+@Component(service = DamService.class)
 public class DamService {
-    
+
     private static final Logger logger = LoggerFactory.getLogger(DamService.class);
-    
-    @Reference
-    private JCRStoreService jcrStoreService;
-    
-    /**
-     * Get binary stream from DAM asset by UUID
-     */
-    public InputStream getDamAssetStream(String assetUuid) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node assetNode = session.getNodeByIdentifier(assetUuid);
-            
-            if (!assetNode.isNodeType("jnt:file")) {
-                throw new RepositoryException("Node is not a file: " + assetNode.getPath());
-            }
-            
-            Node contentNode = assetNode.getNode("jcr:content");
-            Binary binary = contentNode.getProperty("jcr:data").getBinary();
-            
-            return binary.getStream();
-        });
-    }
-    
-    /**
-     * Get file name from DAM asset
-     */
-    public String getDamAssetName(String assetUuid) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node assetNode = session.getNodeByIdentifier(assetUuid);
-            return assetNode.getName();
-        });
-    }
-    
-    /**
-     * Get mime type from DAM asset
-     */
-    public String getDamAssetMimeType(String assetUuid) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node assetNode = session.getNodeByIdentifier(assetUuid);
-            
-            if (assetNode.isNodeType("jnt:file") && assetNode.hasNode("jcr:content")) {
-                Node contentNode = assetNode.getNode("jcr:content");
-                if (contentNode.hasProperty("jcr:mimeType")) {
-                    return contentNode.getProperty("jcr:mimeType").getString();
-                }
-            }
-            
-            return "application/octet-stream";
-        });
-    }
-    
-    /**
-     * Create DAM asset from input stream
-     * 
-     * @param targetFolderPath DAM folder path (e.g., /sites/digitall/files/images)
-     * @param fileName File name for the new asset
-     * @param mimeType MIME type
-     * @param inputStream Binary data
-     * @param title Optional title
-     * @return Created asset node
-     */
-    public Node createDamAsset(String targetFolderPath, String fileName, String mimeType, 
-                               InputStream inputStream, String title) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            // Get or create target folder
-            Node targetFolder = getOrCreateFolder(session, targetFolderPath);
-            
-            // Generate unique file name if needed
-            String uniqueFileName = generateUniqueFileName(targetFolder, fileName);
-            
-            // Create jnt:file node
-            Node fileNode = targetFolder.addNode(uniqueFileName, "jnt:file");
-            
-            // Create jcr:content node
-            Node contentNode = fileNode.addNode("jcr:content", "jnt:resource");
-            
-            try {
-                // Set binary data
-                Binary binary = session.getValueFactory().createBinary(inputStream);
-                contentNode.setProperty("jcr:data", binary);
-                
-                // Set mime type
-                if (mimeType != null && !mimeType.isEmpty()) {
-                    contentNode.setProperty("jcr:mimeType", mimeType);
-                } else {
-                    contentNode.setProperty("jcr:mimeType", "image/png");
-                }
-                
-                // Set last modified
-                contentNode.setProperty("jcr:lastModified", Calendar.getInstance());
-                
-                // Set title if provided
-                if (title != null && !title.isEmpty()) {
-                    fileNode.setProperty("jcr:title", title);
-                }
-                
-                session.save();
-                logger.info("Created DAM asset: {}", fileNode.getPath());
-                
-                return fileNode;
-            } finally {
-                IOUtils.closeQuietly(inputStream);
-            }
-        });
-    }
-    
-    /**
-     * Create DAM asset from input stream by folder UUID
-     */
-    public Node createDamAssetByFolderUuid(String targetFolderUuid, String fileName, String mimeType,
-                                           InputStream inputStream, String title) throws RepositoryException {
-        return JCRTemplate.getInstance().doExecuteWithSystemSession(session -> {
-            Node targetFolder = session.getNodeByIdentifier(targetFolderUuid);
-            String folderPath = targetFolder.getPath();
-            
-            // Delegate to path-based method
-            return createDamAsset(folderPath, fileName, mimeType, inputStream, title);
-        });
-    }
-    
-    /**
-     * Ensure folder exists, create if needed
-     */
-    private Node getOrCreateFolder(JCRSessionWrapper session, String folderPath) throws RepositoryException {
-        if (session.nodeExists(folderPath)) {
-            return session.getNode(folderPath);
+
+    /** Largest DAM image the module sends to Exactly (bytes). */
+    static final long MAX_TRAINING_IMAGE_BYTES = 20L * 1024 * 1024;
+    /** Folder created under the site's files when the caller picks no folder. */
+    public static final String DEFAULT_FOLDER_NAME = "exactly-generated";
+
+    /** An image read from the DAM. */
+    public static final class DamImage {
+        private final String name;
+        private final byte[] data;
+
+        DamImage(String name, byte[] data) {
+            this.name = name;
+            this.data = data;
         }
-        
-        // Create parent folders recursively
-        String[] parts = folderPath.substring(1).split("/");
-        Node current = session.getNode("/");
-        
-        for (String part : parts) {
-            if (!current.hasNode(part)) {
-                current = current.addNode(part, "jnt:folder");
-            } else {
-                current = current.getNode(part);
-            }
+
+        public String getName() {
+            return name;
         }
-        
-        session.save();
-        return current;
+
+        public byte[] getData() {
+            return data;
+        }
     }
-    
+
     /**
-     * Generate unique file name if file already exists
+     * Reads an image of the site's media library.
+     *
+     * @param session   the caller's session
+     * @param site      the site, already checked
+     * @param assetUuid identifier of a {@code jnt:file} under {@code <site>/files} with an image type
+     * @return the file name and content
+     * @throws AccessDeniedException when the node is unknown, unreadable, not an image of this site's
+     *                               files, or larger than {@value #MAX_TRAINING_IMAGE_BYTES} bytes
+     * @throws RepositoryException   on a repository error
+     * @throws IOException           when the binary cannot be read
      */
-    private String generateUniqueFileName(Node folder, String fileName) throws RepositoryException {
-        if (!folder.hasNode(fileName)) {
-            return fileName;
+    public DamImage readImage(JCRSessionWrapper session, JCRSiteNode site, String assetUuid)
+            throws AccessDeniedException, RepositoryException, IOException {
+        JCRNodeWrapper file;
+        try {
+            file = session.getNodeByIdentifier(assetUuid);
+        } catch (ItemNotFoundException | IllegalArgumentException e) {
+            throw new AccessDeniedException();
         }
-        
-        String baseName = fileName;
-        String extension = "";
-        
-        int dotIndex = fileName.lastIndexOf('.');
-        if (dotIndex > 0) {
-            baseName = fileName.substring(0, dotIndex);
-            extension = fileName.substring(dotIndex);
+        if (!file.isNodeType("jnt:file") || !file.getPath().startsWith(site.getPath() + "/files/")
+                || !file.hasNode("jcr:content")) {
+            throw new AccessDeniedException();
         }
-        
-        int counter = 1;
-        String uniqueName;
-        do {
-            uniqueName = baseName + "_" + counter + extension;
-            counter++;
-        } while (folder.hasNode(uniqueName));
-        
-        return uniqueName;
+        JCRNodeWrapper content = file.getNode("jcr:content");
+        String mimeType = content.hasProperty("jcr:mimeType") ? content.getProperty("jcr:mimeType").getString() : "";
+        if (!mimeType.startsWith("image/")) {
+            throw new AccessDeniedException();
+        }
+        Binary binary = content.getProperty("jcr:data").getBinary();
+        try {
+            if (binary.getSize() > MAX_TRAINING_IMAGE_BYTES) {
+                throw new AccessDeniedException();
+            }
+            try (InputStream in = binary.getStream()) {
+                return new DamImage(file.getName(), IOUtils.toByteArray(in));
+            }
+        } finally {
+            binary.dispose();
+        }
+    }
+
+    /**
+     * Resolves the folder generated images go to: the given path, which must be a folder of the site's
+     * files, or {@code <site>/files/exactly-generated} (created when missing) when no path is given.
+     *
+     * @param session    the caller's session
+     * @param site       the site, already checked
+     * @param folderPath a folder path, or {@code null}
+     * @return the folder
+     * @throws AccessDeniedException when the path is outside the site's files, not a folder, or not writable
+     * @throws RepositoryException   on a repository error
+     */
+    public JCRNodeWrapper resolveTargetFolder(JCRSessionWrapper session, JCRSiteNode site, String folderPath)
+            throws AccessDeniedException, RepositoryException {
+        String filesPath = site.getPath() + "/files";
+        JCRNodeWrapper folder;
+        if (folderPath == null || folderPath.trim().isEmpty()) {
+            JCRNodeWrapper files = session.getNode(filesPath);
+            folder = files.hasNode(DEFAULT_FOLDER_NAME) ? files.getNode(DEFAULT_FOLDER_NAME)
+                    : files.addNode(DEFAULT_FOLDER_NAME, "jnt:folder");
+        } else {
+            String path = folderPath.trim();
+            if (path.contains("..") || !(path.equals(filesPath) || path.startsWith(filesPath + "/"))
+                    || !session.nodeExists(path)) {
+                throw new AccessDeniedException();
+            }
+            folder = session.getNode(path);
+        }
+        if (!folder.isNodeType("jnt:folder") || !folder.hasPermission(ExactlyAccessService.PERMISSION_WRITE)) {
+            throw new AccessDeniedException();
+        }
+        return folder;
+    }
+
+    /**
+     * Creates an image file in a folder; the session is saved by the caller once all files are added.
+     *
+     * @param folder   the target folder, already checked
+     * @param fileName wanted file name (made unique in the folder)
+     * @param mimeType media type of the image
+     * @param data     image content
+     * @param title    title of the file, or {@code null}
+     * @return the created file node
+     * @throws RepositoryException on a repository error
+     */
+    public JCRNodeWrapper createImage(JCRNodeWrapper folder, String fileName, String mimeType, byte[] data, String title)
+            throws RepositoryException {
+        String name = JCRContentUtils.findAvailableNodeName(folder, JCRContentUtils.escapeLocalNodeName(fileName));
+        JCRNodeWrapper file = folder.uploadFile(name, new ByteArrayInputStream(data), mimeType);
+        if (title != null && !title.isEmpty()) {
+            file.setProperty("jcr:title", title);
+        }
+        logger.debug("Created DAM image {}", file.getPath());
+        return file;
     }
 }

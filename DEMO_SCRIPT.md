@@ -19,8 +19,8 @@ This demo showcases the Jahia Exactly Image Generator module, which integrates E
 > "Today I'll demonstrate the Exactly Image Generator module for Jahia. This module integrates Exactly.ai's advanced AI image generation directly into your Jahia CMS workflow. With this tool, you can train custom AI models on your brand's visual style and generate on-brand images without leaving Jahia."
 
 **Show:**
-- Navigate to **Tools → Exactly Image Generator** in Jahia admin panel
-- Point out the three-step wizard interface
+- Open **jContent**, choose the site, then **Additional → Exactly.ai Image Generator** (the site must have the module enabled)
+- Point out the three steps, shown as tabs in the header: Style, Training, Generation
 
 ---
 
@@ -30,7 +30,7 @@ This demo showcases the Jahia Exactly Image Generator module, which integrates E
 > "First, let's sync our Exactly.ai styles. If you've already created styles in Exactly.ai, they'll appear here. Otherwise, you can create new styles directly through the Exactly.ai interface."
 
 **Steps:**
-1. Click **"Sync Styles"** button in Step 1
+1. Click **"Sync from Exactly.ai"** on the Style tab (the app also syncs once when it opens)
 2. Show the styles list that appears with status badges
 3. Point out the style information:
    - Style name
@@ -41,8 +41,7 @@ This demo showcases the Jahia Exactly Image Generator module, which integrates E
 > "Each style represents a custom AI model trained on specific visual characteristics. Styles can be deleted if no longer needed, and we can see their current training status at a glance."
 
 **Action:**
-- Click on a style to select it (or create a new one if demo environment is fresh)
-- Click **"Next"** to proceed to training
+- Click **Select** on a style (or **New style** if the demo environment is fresh): a draft style opens the Training tab, a ready one the Generation tab
 
 ---
 
@@ -99,7 +98,7 @@ This demo showcases the Jahia Exactly Image Generator module, which integrates E
 **Steps:**
 
 1. **Navigate to Generate Step:**
-   - Click **"Next"** to Step 3
+   - Click **Generate images** once training is complete, or the **3. Generation** tab (enabled when the style is ready)
    - Show the generation interface
 
 2. **Basic Image Generation:**

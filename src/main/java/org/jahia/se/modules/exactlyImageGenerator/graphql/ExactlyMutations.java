@@ -4,583 +4,295 @@ import graphql.annotations.annotationTypes.GraphQLDescription;
 import graphql.annotations.annotationTypes.GraphQLField;
 import graphql.annotations.annotationTypes.GraphQLName;
 import graphql.annotations.annotationTypes.GraphQLNonNull;
-import org.jahia.osgi.BundleUtils;
-import org.jahia.se.modules.exactlyImageGenerator.services.*;
+import org.jahia.se.modules.exactlyImageGenerator.proxy.ExactlyProxyClient;
+import org.jahia.se.modules.exactlyImageGenerator.services.DamService;
+import org.jahia.se.modules.exactlyImageGenerator.services.GeneratedImageRegistry;
+import org.jahia.se.modules.exactlyImageGenerator.services.JcrStyleRepository;
+import org.jahia.services.content.JCRNodeWrapper;
+import org.jahia.services.content.JCRSessionWrapper;
+import org.jahia.services.content.decorator.JCRSiteNode;
+import org.json.JSONObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * GraphQL mutations for Exactly.ai operations
+ * Exactly fields that change something, under {@code Mutation.exactly}.
+ * <p>
+ * Each field resolves its site or style with the caller's session and needs {@code jContentAccess}
+ * and {@code jcr:write_default} there ({@link org.jahia.se.modules.exactlyImageGenerator.services.ExactlyAccessService});
+ * JCR writes are made with the caller's session too. Answers carry a result message or JSON in
+ * {@code message}; see {@link ExactlyOperations} for the error policy.
  */
 @GraphQLName("ExactlyMutations")
 @GraphQLDescription("Exactly.ai Image Generator mutations")
-public class ExactlyMutations {
-    
+public class ExactlyMutations extends ExactlyOperations {
+
     private static final Logger logger = LoggerFactory.getLogger(ExactlyMutations.class);
-    
-    private ExactlyService exactlyService;
-    private JcrStyleRepository styleRepository;
-    private DamService damService;
-    
-    public ExactlyMutations() {
-        this.exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        this.styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        this.damService = BundleUtils.getOsgiService(DamService.class, null);
-    }
-    
-    /**
-     * Extract user-friendly error message from API exception
-     */
-    private String extractApiErrorMessage(String exceptionMessage) {
-        if (exceptionMessage == null) {
-            return "An unknown error occurred";
-        }
-        
-        // Pattern: "API call failed: 400 - {\"message\": \"Not enough images...\", ...}"
-        int jsonStart = exceptionMessage.indexOf("{");
-        if (jsonStart >= 0) {
-            try {
-                String jsonPart = exceptionMessage.substring(jsonStart);
-                org.json.JSONObject json = new org.json.JSONObject(jsonPart);
-                String message = json.optString("message");
-                if (!message.isEmpty()) {
-                    return message;
-                }
-            } catch (Exception e) {
-                // Fall through to default handling
-            }
-        }
-        
-        // Fallback: return original message
-        return exceptionMessage;
-    }
-    
-    /**
-     * Sync styles from Exactly.ai
-     */
+
+    static final int MAX_TRAINING_IMAGES_PER_CALL = 50;
+    static final int MAX_PROMPT_LENGTH = 2000;
+    static final int MAX_TITLE_LENGTH = 200;
+
     @GraphQLField
     @GraphQLName("syncStyles")
-    @GraphQLDescription("Sync all styles from Exactly.ai to JCR")
-    public ExactlySyncResponse syncStyles(@GraphQLName("siteKey") String siteKey) {
-        logger.info("GraphQL: syncStyles called for site: {}", siteKey);
-        
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        
-        try {
-            // Get all models from Exactly.ai
+    @GraphQLDescription("Copy the models of the Exactly account into the site's styles folder")
+    public ExactlySyncResponse syncStyles(@GraphQLName("siteKey") @GraphQLNonNull String siteKey) {
+        return run("syncStyles", () -> {
+            JCRSessionWrapper session = access.userSession();
+            JCRSiteNode site = access.requireSite(session, siteKey, true);
             List<Map<String, Object>> models = exactlyService.listStyles();
-            
-            // Save/update each model in JCR
+            List<String> failed = new ArrayList<>();
             for (Map<String, Object> model : models) {
-                String exactlyId = (String) model.get("uid");
-                String name = (String) model.get("name");
-                String status = (String) model.get("status");
-                Boolean active = (Boolean) model.get("active");
                 String metadata = (String) model.get("metadata");
-                
-                // Extract description from metadata
-                String description = null;
-                if (metadata != null) {
-                    try {
-                        org.json.JSONObject metadataJson = new org.json.JSONObject(metadata);
-                        org.json.JSONObject customData = metadataJson.optJSONObject("custom_data");
-                        if (customData != null) {
-                            description = customData.optString("description", null);
-                        }
-                    } catch (Exception e) {
-                        logger.warn("Failed to parse metadata for style {}", exactlyId, e);
-                    }
+                try {
+                    styleRepository.saveStyle(session, site, new JcrStyleRepository.StyleData(
+                            (String) model.get("uid"), (String) model.get("name"), (String) model.get("status"),
+                            (Boolean) model.get("active"), metadata, descriptionOf(metadata)));
+                } catch (IllegalArgumentException | javax.jcr.RepositoryException e) {
+                    // One model the site cannot store must not stop the others
+                    session.refresh(false);
+                    logger.warn("Style {} not synced: {}", model.get("uid"), e.getMessage());
+                    failed.add(String.valueOf(model.get("name")));
                 }
-                
-                styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, active, metadata, description);
             }
-            
-            return new ExactlySyncResponseImpl(true, "Synced " + models.size() + " styles");
-        } catch (Exception e) {
-            logger.error("Error syncing styles", e);
-            return new ExactlySyncResponseImpl(false, "Error: " + e.getMessage());
-        }
+            if (failed.isEmpty()) {
+                return success("Synced " + models.size() + " styles");
+            }
+            return failure("Synced " + (models.size() - failed.size()) + " of " + models.size()
+                    + " styles; not synced: " + String.join(", ", failed));
+        });
     }
-    
-    /**
-     * Create a new style in Exactly.ai
-     */
+
     @GraphQLField
     @GraphQLName("createStyle")
-    @GraphQLDescription("Create a new style in Exactly.ai")
-    public ExactlySyncResponse createStyle(
-            @GraphQLName("siteKey") String siteKey,
-            @GraphQLName("name") String name,
-            @GraphQLName("description") String description) {
-        logger.info("GraphQL: createStyle called - name: {}, site: {}", name, siteKey);
-        
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        
-        try {
-            // Create model in Exactly.ai
-            Map<String, Object> model = exactlyService.createStyle(name, description);
+    @GraphQLDescription("Create a model on Exactly and its style node on the site")
+    public ExactlySyncResponse createStyle(@GraphQLName("siteKey") @GraphQLNonNull String siteKey,
+                                           @GraphQLName("name") @GraphQLNonNull String name,
+                                           @GraphQLName("description") String description) {
+        return run("createStyle", () -> {
+            if (name.trim().isEmpty() || name.length() > MAX_TITLE_LENGTH) {
+                throw new IllegalArgumentException("Invalid style name");
+            }
+            JCRSessionWrapper session = access.userSession();
+            JCRSiteNode site = access.requireSite(session, siteKey, true);
+            Map<String, Object> model = exactlyService.createStyle(name.trim(), description);
             String exactlyId = (String) model.get("uid");
-            String status = (String) model.get("status");
-            String metadata = (String) model.get("metadata");
-            
-            // Create node in JCR
-            styleRepository.findOrCreateStyle(siteKey, exactlyId, name, status, true, metadata, description);
-            
-            return new ExactlySyncResponseImpl(true, exactlyId);
-        } catch (Exception e) {
-            logger.error("Error creating style", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
+            JCRNodeWrapper style = styleRepository.saveStyle(session, site, new JcrStyleRepository.StyleData(
+                    exactlyId, name.trim(), (String) model.get("status"), true, (String) model.get("metadata"), description));
+            return success(style.getIdentifier());
+        });
     }
-    
-    /**
-     * Delete a style from Exactly.ai
-     */
+
     @GraphQLField
     @GraphQLName("deleteStyle")
-    @GraphQLDescription("Delete a style from Exactly.ai and JCR")
-    public ExactlySyncResponse deleteStyle(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: deleteStyle called for style: {}", styleUuid);
-        
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        
-        try {
-            // Get exactlyId from JCR
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            
-            // Delete from Exactly.ai
-            exactlyService.deleteStyle(exactlyId);
-            
-            // Delete from JCR
-            styleRepository.deleteStyle(styleUuid);
-            
-            return new ExactlySyncResponseImpl(true, "Style deleted successfully");
-        } catch (Exception e) {
-            logger.error("Error deleting style", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
-    }
-    
-    /**
-     * Get training images from Exactly
-     */
-    @GraphQLField
-    @GraphQLName("getTrainingImages")
-    @GraphQLDescription("Get training images from Exactly.ai for a style")
-    public ExactlySyncResponse getTrainingImages(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: getTrainingImages called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            
-            if (exactlyId == null || exactlyId.isEmpty()) {
-                logger.warn("No Exactly ID found for style UUID: {}", styleUuid);
-                // Return empty array for styles not yet synced with Exactly.ai
-                return new ExactlySyncResponseImpl(true, "[]");
+    @GraphQLDescription("Delete a style on Exactly and its node")
+    public ExactlySyncResponse deleteStyle(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid) {
+        return run("deleteStyle", () -> {
+            JCRNodeWrapper style = access.requireStyle(access.userSession(), styleUuid, true);
+            String exactlyId = styleRepository.getExactlyId(style);
+            if (exactlyId != null) {
+                exactlyService.deleteStyle(exactlyId);
             }
-            
-            List<Map<String, Object>> imagesList = exactlyService.getTrainingImages(exactlyId);
-            
-            org.json.JSONArray jsonArray = new org.json.JSONArray(imagesList);
-            String imagesJson = jsonArray.toString();
-            
-            logger.info("Retrieved {} training images", imagesList.size());
-            return new ExactlySyncResponseImpl(true, imagesJson);
-            
-        } catch (Exception e) {
-            logger.error("Error fetching training images from Exactly.ai", e);
-            return new ExactlySyncResponseImpl(false, "Error: " + e.getMessage());
-        }
+            styleRepository.deleteStyle(style);
+            return success("Style deleted");
+        });
     }
-    
-    /**
-     * Delete training image from Exactly
-     */
+
     @GraphQLField
     @GraphQLName("deleteTrainingImage")
-    @GraphQLDescription("Delete a training image from Exactly.ai")
-    public ExactlySyncResponse deleteTrainingImage(
-            @GraphQLName("styleUuid") String styleUuid,
-            @GraphQLName("imageUid") String imageUid) {
-        logger.info("GraphQL: deleteTrainingImage called - style: {}, image: {}", styleUuid, imageUid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            exactlyService.deleteTrainingImage(exactlyId, imageUid);
-            
-            logger.info("Successfully deleted training image: {}", imageUid);
-            return new ExactlySyncResponseImpl(true, "Image deleted successfully");
-            
-        } catch (Exception e) {
-            logger.error("Error deleting training image from Exactly.ai", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
+    @GraphQLDescription("Delete a training image of a style on Exactly")
+    public ExactlySyncResponse deleteTrainingImage(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid,
+                                                   @GraphQLName("imageUid") @GraphQLNonNull String imageUid) {
+        return run("deleteTrainingImage", () -> {
+            exactlyService.deleteTrainingImage(requireExactlyId(styleUuid), imageUid);
+            return success("Image deleted");
+        });
     }
-    
-    /**
-     * Upload training images to Exactly
-     */
+
     @GraphQLField
     @GraphQLName("uploadTrainingImages")
-    @GraphQLDescription("Upload training images to Exactly.ai for a style")
-    public ExactlySyncResponse uploadTrainingImages(
-            @GraphQLName("styleUuid") String styleUuid,
-            @GraphQLName("damAssetUuids") List<String> damAssetUuids) {
-        logger.info("GraphQL: uploadTrainingImages called - style: {}, {} images", styleUuid, damAssetUuids.size());
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        if (damService == null) {
-            damService = BundleUtils.getOsgiService(DamService.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            Map<String, Object> result = exactlyService.uploadTrainingImages(exactlyId, damAssetUuids);
-            
-            String message = (String) result.get("message");
-            boolean success = "success".equals(result.get("status")) || "partial".equals(result.get("status"));
-            
-            logger.info("Upload result: {}", message);
-            return new ExactlySyncResponseImpl(success, message);
-            
-        } catch (Exception e) {
-            logger.error("Error uploading training images", e);
-            return new ExactlySyncResponseImpl(false, "Error: " + e.getMessage());
-        }
+    @GraphQLDescription("Send images of the site's media library to Exactly as training images of a style")
+    public ExactlySyncResponse uploadTrainingImages(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid,
+                                                    @GraphQLName("damAssetUuids") @GraphQLNonNull List<String> damAssetUuids) {
+        return run("uploadTrainingImages", () -> {
+            Set<String> uuids = new LinkedHashSet<>(damAssetUuids);
+            if (uuids.isEmpty() || uuids.size() > MAX_TRAINING_IMAGES_PER_CALL) {
+                throw new IllegalArgumentException("Select between 1 and " + MAX_TRAINING_IMAGES_PER_CALL + " images");
+            }
+            JCRSessionWrapper session = access.userSession();
+            JCRNodeWrapper style = access.requireStyle(session, styleUuid, true);
+            String exactlyId = exactlyIdOf(style);
+            JCRSiteNode site = style.getResolveSite();
+            // Read every image first: one refused image refuses the whole call
+            List<DamService.DamImage> images = new ArrayList<>();
+            for (String uuid : uuids) {
+                images.add(damService.readImage(session, site, uuid));
+            }
+            Map<String, Object> result = exactlyService.uploadTrainingImages(exactlyId, images);
+            return new ExactlySyncResponseImpl(!"failed".equals(result.get("status")), (String) result.get("message"));
+        });
     }
-    
-    /**
-     * Train a style
-     */
+
     @GraphQLField
     @GraphQLName("trainStyle")
-    @GraphQLDescription("Start training for a style")
-    public ExactlySyncResponse trainStyle(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: trainStyle called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            Map<String, Object> result = exactlyService.trainStyle(exactlyId);
-            
-            // Return job ID and status as JSON in message
-            org.json.JSONObject jsonResult = new org.json.JSONObject(result);
-            String resultJson = jsonResult.toString();
-            
-            logger.info("Training started successfully");
-            return new ExactlySyncResponseImpl(true, resultJson);
-            
-        } catch (Exception e) {
-            logger.error("Error starting training", e);
-            
-            // Extract API error message from exception
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
+    @GraphQLDescription("Start training a style; answers the job as JSON in message")
+    public ExactlySyncResponse trainStyle(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid) {
+        return modelCommand("trainStyle", styleUuid, "training", exactlyId -> exactlyService.trainStyle(exactlyId));
     }
-    
-    /**
-     * Get training progress
-     */
-    @GraphQLField
-    @GraphQLName("getTrainingProgress")
-    @GraphQLDescription("Get training progress for a style")
-    public ExactlySyncResponse getTrainingProgress(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: getTrainingProgress called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            
-            if (exactlyId == null || exactlyId.isEmpty()) {
-                logger.warn("No Exactly ID found for style UUID: {}", styleUuid);
-                // Return a default response indicating the style is in draft state
-                org.json.JSONObject defaultProgress = new org.json.JSONObject();
-                defaultProgress.put("status", "draft");
-                defaultProgress.put("progress", 0);
-                return new ExactlySyncResponseImpl(true, defaultProgress.toString());
-            }
-            
-            Map<String, Object> progress = exactlyService.getTrainingProgress(exactlyId);
-            
-            // Return progress as JSON in message
-            org.json.JSONObject jsonProgress = new org.json.JSONObject(progress);
-            String progressJson = jsonProgress.toString();
-            
-            return new ExactlySyncResponseImpl(true, progressJson);
-            
-        } catch (Exception e) {
-            logger.error("Error getting training progress", e);
-            return new ExactlySyncResponseImpl(false, "Error: " + e.getMessage());
-        }
-    }
-    
-    /**
-     * Put model to draft state
-     */
+
     @GraphQLField
     @GraphQLName("putModelToDraft")
-    @GraphQLDescription("Put model back to draft state to add more images and retrain")
-    public ExactlySyncResponse putModelToDraft(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: putModelToDraft called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            Map<String, Object> result = exactlyService.putModelToDraft(exactlyId);
-            
-            org.json.JSONObject jsonResult = new org.json.JSONObject(result);
-            String resultJson = jsonResult.toString();
-            
-            logger.info("Model put to draft successfully");
-            return new ExactlySyncResponseImpl(true, resultJson);
-            
-        } catch (Exception e) {
-            logger.error("Error putting model to draft", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
+    @GraphQLDescription("Put a trained style back to draft to add images and train again")
+    public ExactlySyncResponse putModelToDraft(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid) {
+        return modelCommand("putModelToDraft", styleUuid, "draft", exactlyId -> exactlyService.putModelToDraft(exactlyId));
     }
-    
-    /**
-     * Cancel model training
-     */
+
     @GraphQLField
     @GraphQLName("cancelTraining")
-    @GraphQLDescription("Cancel ongoing model training")
-    public ExactlySyncResponse cancelTraining(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: cancelTraining called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            Map<String, Object> result = exactlyService.cancelTraining(exactlyId);
-            
-            org.json.JSONObject jsonResult = new org.json.JSONObject(result);
-            String resultJson = jsonResult.toString();
-            
-            logger.info("Training canceled successfully");
-            return new ExactlySyncResponseImpl(true, resultJson);
-            
-        } catch (Exception e) {
-            logger.error("Error canceling training", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
+    @GraphQLDescription("Cancel the training of a style")
+    public ExactlySyncResponse cancelTraining(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid) {
+        return modelCommand("cancelTraining", styleUuid, "draft", exactlyId -> exactlyService.cancelTraining(exactlyId));
     }
-    
-    /**
-     * Get model details
-     */
-    @GraphQLField
-    @GraphQLName("getModel")
-    @GraphQLDescription("Get model details from Exactly.ai")
-    public ExactlySyncResponse getModel(@GraphQLName("styleUuid") String styleUuid) {
-        logger.info("GraphQL: getModel called for style: {}", styleUuid);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            Map<String, Object> model = exactlyService.getModel(exactlyId);
-            
-            org.json.JSONObject jsonResult = new org.json.JSONObject(model);
-            String resultJson = jsonResult.toString();
-            
-            logger.info("Model details fetched successfully");
-            return new ExactlySyncResponseImpl(true, resultJson);
-            
-        } catch (Exception e) {
-            logger.error("Error fetching model details", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
-        }
-    }
-    
-    /**
-     * Generate images with a style and prompt
-     */
+
     @GraphQLField
     @GraphQLName("generateImages")
-    @GraphQLDescription("Generate images using a trained style and prompt")
-    public ExactlySyncResponse generateImages(
-            @GraphQLName("styleUuid") String styleUuid,
-            @GraphQLName("prompt") String prompt,
-            @GraphQLName("paramsJson") String paramsJson) {
-        logger.info("GraphQL: generateImages called for style: {} with prompt: {}", styleUuid, prompt);
-        
-        // Lazy load services
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
-        }
-        if (styleRepository == null) {
-            styleRepository = BundleUtils.getOsgiService(JcrStyleRepository.class, null);
-        }
-        
-        try {
-            String exactlyId = styleRepository.getExactlyId(styleUuid);
-            
-            if (exactlyId == null || exactlyId.isEmpty()) {
-                logger.warn("No Exactly ID found for style UUID: {}", styleUuid);
-                return new ExactlySyncResponseImpl(false, "Style not found or not synced with Exactly.ai");
+    @GraphQLDescription("Generate images with a trained style; answers {generationId, status, urls} as JSON in message")
+    public ExactlySyncResponse generateImages(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid,
+                                              @GraphQLName("prompt") @GraphQLNonNull String prompt,
+                                              @GraphQLName("paramsJson") String paramsJson) {
+        return run("generateImages", () -> {
+            if (prompt.trim().isEmpty() || prompt.length() > MAX_PROMPT_LENGTH) {
+                throw new IllegalArgumentException("The prompt must hold 1 to " + MAX_PROMPT_LENGTH + " characters");
             }
-            
-            Map<String, Object> result = exactlyService.generateImages(exactlyId, prompt, paramsJson);
-            
-            // Return result as JSON in message
-            org.json.JSONObject jsonResult = new org.json.JSONObject(result);
-            String resultJson = jsonResult.toString();
-            
-            logger.info("Images generated successfully");
-            return new ExactlySyncResponseImpl(true, resultJson);
-            
+            JCRSessionWrapper session = access.userSession();
+            JCRNodeWrapper style = access.requireStyle(session, styleUuid, true);
+            Map<String, Object> result = exactlyService.generateImages(exactlyIdOf(style), prompt, paramsJson);
+            @SuppressWarnings("unchecked")
+            List<String> urls = (List<String>) result.get("urls");
+            String generationId = generations.register(session.getUser().getUsername(),
+                    style.getResolveSite().getSiteKey(), styleUuid, prompt, urls);
+            return success(new JSONObject()
+                    .put("generationId", generationId)
+                    .put("status", result.get("status"))
+                    .put("urls", urls)
+                    .toString());
+        });
+    }
+
+    @GraphQLField
+    @GraphQLName("saveGeneratedImages")
+    @GraphQLDescription("Save images of a generation to a folder of the site's media library")
+    public ExactlySyncResponse saveGeneratedImages(@GraphQLName("generationId") @GraphQLNonNull String generationId,
+                                                   @GraphQLName("indices") @GraphQLNonNull List<Integer> indices,
+                                                   @GraphQLName("targetFolderPath") String targetFolderPath,
+                                                   @GraphQLName("title") String title) {
+        return run("saveGeneratedImages", () -> {
+            JCRSessionWrapper session = access.userSession();
+            GeneratedImageRegistry.Generation generation = generations.get(generationId, session.getUser().getUsername());
+            if (generation == null) {
+                return failure("This generation has expired: generate the images again");
+            }
+            // The generation was allowed on this site; the caller must still be allowed now
+            access.requireStyle(session, generation.getStyleUuid(), true);
+            JCRSiteNode site = access.requireSite(session, generation.getSiteKey(), true);
+            JCRNodeWrapper folder = damService.resolveTargetFolder(session, site, targetFolderPath);
+            String fileTitle = title != null && !title.trim().isEmpty()
+                    ? truncate(title.trim(), MAX_TITLE_LENGTH) : truncate(generation.getPrompt(), MAX_TITLE_LENGTH);
+
+            Set<Integer> wanted = new LinkedHashSet<>(indices);
+            List<String> urls = generation.getUrls();
+            int saved = 0;
+            for (Integer index : wanted) {
+                if (index == null || index < 0 || index >= urls.size()) {
+                    throw new IllegalArgumentException("Invalid image index");
+                }
+                try {
+                    ExactlyProxyClient.Download image = exactlyService.downloadImage(urls.get(index));
+                    String extension = extensionOf(image.getMimeType());
+                    if (extension == null) {
+                        logger.warn("Generated image {} has an unexpected type: {}", index, image.getMimeType());
+                        continue;
+                    }
+                    damService.createImage(folder, "exactly-" + generationId.substring(0, 8) + "-" + (index + 1) + extension,
+                            image.getMimeType(), image.getData(), fileTitle);
+                    saved++;
+                } catch (java.io.IOException e) {
+                    logger.warn("Failed to download generated image {}: {}", index, e.getMessage());
+                }
+            }
+            if (saved == 0) {
+                return failure("No image could be saved");
+            }
+            session.save();
+            return success(new JSONObject().put("saved", saved).put("requested", wanted.size())
+                    .put("folderPath", folder.getPath()).toString());
+        });
+    }
+
+    /** Exactly call on a style's model that also records the style's new status. */
+    @FunctionalInterface
+    private interface ModelCall {
+        Map<String, Object> apply(String exactlyId) throws Exception;
+    }
+
+    private ExactlySyncResponse modelCommand(String name, String styleUuid, String fallbackStatus, ModelCall call) {
+        return run(name, () -> {
+            JCRNodeWrapper style = access.requireStyle(access.userSession(), styleUuid, true);
+            Map<String, Object> result = call.apply(exactlyIdOf(style));
+            Object status = result.get("status");
+            styleRepository.updateStatus(style, status instanceof String && !((String) status).isEmpty()
+                    ? (String) status : fallbackStatus);
+            return success(new JSONObject(result).toString());
+        });
+    }
+
+    private String requireExactlyId(String styleUuid) throws Exception {
+        return exactlyIdOf(access.requireStyle(access.userSession(), styleUuid, true));
+    }
+
+    private String exactlyIdOf(JCRNodeWrapper style) throws Exception {
+        String exactlyId = styleRepository.getExactlyId(style);
+        if (exactlyId == null) {
+            throw new IllegalArgumentException("Style not synced with Exactly.ai");
+        }
+        return exactlyId;
+    }
+
+    private static String descriptionOf(String metadata) {
+        if (metadata == null) {
+            return null;
+        }
+        try {
+            JSONObject customData = new JSONObject(metadata).optJSONObject("custom_data");
+            return customData != null ? customData.optString("description", null) : null;
         } catch (Exception e) {
-            logger.error("Error generating images", e);
-            String errorMessage = extractApiErrorMessage(e.getMessage());
-            return new ExactlySyncResponseImpl(false, errorMessage);
+            return null;
         }
     }
 
-    /**
-     * Save generated images to DAM
-     * POST operation to download images and save them to JCR
-     */
-    @GraphQLField
-    @GraphQLName("saveGeneratedImagesToDam")
-    public ExactlySyncResponse saveGeneratedImagesToDam(
-            @GraphQLName("projectNodeUuid") String projectNodeUuid,
-            @GraphQLName("targetFolderPath") String targetFolderPath,
-            @GraphQLName("targetFolderUuid") String targetFolderUuid,
-            @GraphQLName("selectionJson") String selectionJson) {
-        
-        logger.info("GraphQL: saveGeneratedImagesToDam called");
-        
-        if (damService == null) {
-            damService = BundleUtils.getOsgiService(DamService.class, null);
+    private static String extensionOf(String mimeType) {
+        if (mimeType == null) {
+            return null;
         }
-        if (exactlyService == null) {
-            exactlyService = BundleUtils.getOsgiService(ExactlyService.class, null);
+        switch (mimeType) {
+            case "image/png":
+                return ".png";
+            case "image/jpeg":
+                return ".jpg";
+            case "image/webp":
+                return ".webp";
+            default:
+                return null;
         }
-        
-        try {
-            // Parse selection JSON
-            org.json.JSONArray selection = new org.json.JSONArray(selectionJson);
-            logger.info("Saving {} images to DAM at {}", selection.length(), targetFolderPath);
-            
-            int savedCount = 0;
-            for (int i = 0; i < selection.length(); i++) {
-                org.json.JSONObject item = selection.getJSONObject(i);
-                String remoteUrl = item.getString("remoteUrl");
-                String fileName = item.getString("fileName");
-                String title = item.optString("title", fileName);
-                
-                try {
-                    // Download image from Exactly.ai
-                    InputStream imageStream = exactlyService.downloadImage(remoteUrl);
-                    
-                    // Determine MIME type from file extension
-                    String mimeType = "image/png";
-                    if (fileName.toLowerCase().endsWith(".jpg") || fileName.toLowerCase().endsWith(".jpeg")) {
-                        mimeType = "image/jpeg";
-                    }
-                    
-                    // Save to DAM
-                    damService.createDamAsset(targetFolderPath, fileName, mimeType, imageStream, title);
-                    savedCount++;
-                    logger.info("Saved image {} to DAM: {}", i + 1, fileName);
-                    
-                } catch (Exception e) {
-                    logger.error("Failed to save image {}: {}", fileName, e.getMessage());
-                    // Continue with next image
-                }
-            }
-            
-            if (savedCount == 0) {
-                return new ExactlySyncResponseImpl(false, "Failed to save any images");
-            }
-            
-            return new ExactlySyncResponseImpl(true, "Successfully saved " + savedCount + " of " + selection.length() + " images");
-            
-        } catch (Exception e) {
-            logger.error("Error saving images to DAM", e);
-            return new ExactlySyncResponseImpl(false, "Error: " + e.getMessage());
-        }
+    }
+
+    private static String truncate(String value, int max) {
+        return value.length() > max ? value.substring(0, max) : value;
     }
 }

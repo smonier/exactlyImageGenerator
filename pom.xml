@@ -34,7 +34,7 @@
     <groupId>org.jahia.se.modules</groupId>
     <artifactId>exactlyImageGenerator</artifactId>
     <name>Exactly.ai Image Generator</name>
-    <version>1.0.1-SNAPSHOT</version>
+    <version>1.1.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
     <description>This is the custom ReactJS module (Exactly.ai Image Generator) for running on a Jahia server.</description>
 
@@ -66,13 +66,6 @@
             <scope>provided</scope>
         </dependency>
         
-        <!-- GraphQL Kickstart -->
-        <dependency>
-            <groupId>com.graphql-java-kickstart</groupId>
-            <artifactId>graphql-java-servlet</artifactId>
-            <version>11.1.0</version>
-            <scope>provided</scope>
-        </dependency>
         
         <!-- Apache HttpClient for Exactly API calls -->
         <dependency>
@@ -135,6 +128,7 @@
                 <configuration>
                     <instructions>
                         <_dsannotations>*</_dsannotations>
+                        <!-- org.json is embedded: the module parses the Exactly answers with it -->
                         <Embed-Dependency>json</Embed-Dependency>
                         <Import-Package>!org.json.*,*</Import-Package>
                         <Export-Package>org.jahia.se.modules.exactlyImageGenerator.graphql</Export-Package>
@@ -158,7 +152,7 @@
             <plugin>
                 <groupId>com.github.eirslett</groupId>
                 <artifactId>frontend-maven-plugin</artifactId>
-                <version>1.12.1</version>
+                <version>1.15.1</version>
                 <executions>
                     <execution>
                         <id>npm install node and yarn</id>
@@ -167,8 +161,8 @@
                             <goal>install-node-and-yarn</goal>
                         </goals>
                         <configuration>
-                            <nodeVersion>v18.20.5</nodeVersion>
-                            <yarnVersion>v1.22.19</yarnVersion>
+                            <nodeVersion>v22.14.0</nodeVersion>
+                            <yarnVersion>v1.22.22</yarnVersion>
                         </configuration>
                     </execution>
                     <execution>
@@ -206,7 +200,62 @@
                 <enabled>true</enabled>
             </snapshots>
         </repository>
+        <repository>
+            <id>jahia-archive-releases</id>
+            <url>https://archives-devtools.jahia.com/jahia-releases</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>jahia-archive-thirdparty</id>
+            <url>https://archives-devtools.jahia.com/thirdparty-releases</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
     </repositories>
+    <!-- Since 2026-10-22 the public group answers 404 for older releases the 8.2 parent depends on -->
+    <pluginRepositories>
+        <pluginRepository>
+            <id>jahia-public</id>
+            <url>https://devtools.jahia.com/nexus/content/groups/public</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+        </pluginRepository>
+        <pluginRepository>
+            <id>jahia-archive-releases</id>
+            <url>https://archives-devtools.jahia.com/jahia-releases</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>jahia-archive-thirdparty</id>
+            <url>https://archives-devtools.jahia.com/thirdparty-releases</url>
+            <releases>
+                <enabled>true</enabled>
+                <updatePolicy>never</updatePolicy>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+    </pluginRepositories>
     
     <profiles>
         <profile>
