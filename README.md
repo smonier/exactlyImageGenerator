@@ -7,6 +7,8 @@ library.
 - **Module type:** OSGi bundle (Maven) with a React 18 jContent UI extension (webpack, Module
   Federation, `@jahia/moonstone` 2.20).
 - **Jahia:** 8.2 (jContent 3.7 or later).
+- **Exactly.ai:** a subscription with API access (sold by Exactly.ai, not included); training and
+  generation use that account's credits.
 - **Where:** jContent, *Additional* accordion, *Exactly.ai Image Generator*, on sites that enable
   the module.
 
