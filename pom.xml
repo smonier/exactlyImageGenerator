@@ -36,7 +36,7 @@
     <name>Exactly.ai Image Generator</name>
     <version>1.1.1-SNAPSHOT</version>
     <packaging>bundle</packaging>
-    <description>This is the custom ReactJS module (Exactly.ai Image Generator) for running on a Jahia server.</description>
+    <description>jContent app that trains Exactly.ai image styles on the media library, generates images with them and saves the ones editors keep back into the media library.</description>
 
     <scm>
         <connection>scm:git:git@github.com:smonier/exactlyImageGenerator.git</connection>

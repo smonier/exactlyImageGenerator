@@ -5,6 +5,7 @@
 - Form fields no longer repeat their control's id (the label container had the same id), which screen readers and tests tripped on.
 - Generated images keep their own ratio in the results instead of a letterboxed square.
 - The file name example in the Generation step reads `red-bicycle.jpg`.
+- The module description (shown by the module manager and the Store) describes what the module does.
 
 ## 1.1.0 (2026-10-24)
 
