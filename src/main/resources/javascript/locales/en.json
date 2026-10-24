@@ -151,8 +151,8 @@
     "folderHelper": "A folder of this site's media library.",
     "defaultFolder": "files/exactly-generated (default)",
     "chooseFolder": "Choose",
-    "fileTitle": "Title of the files",
-    "fileTitleHelper": "Defaults to the prompt.",
+    "fileTitle": "File name and title",
+    "fileTitleHelper": "Names the files (bicycle-red.jpg, then -2, -3 for several) and sets their title. Defaults to the prompt.",
     "save": "Save {{count}} images",
     "saved": "{{saved}} of {{requested}} images saved to {{folder}}. Publish them when you use them on a page.",
     "saveFailed": "The images could not be saved: {{message}}"

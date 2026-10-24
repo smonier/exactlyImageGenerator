@@ -8,6 +8,7 @@ import org.jahia.se.modules.exactlyImageGenerator.proxy.ExactlyProxyClient;
 import org.jahia.se.modules.exactlyImageGenerator.services.DamService;
 import org.jahia.se.modules.exactlyImageGenerator.services.GeneratedImageRegistry;
 import org.jahia.se.modules.exactlyImageGenerator.services.JcrStyleRepository;
+import org.jahia.services.content.JCRContentUtils;
 import org.jahia.services.content.JCRNodeWrapper;
 import org.jahia.services.content.JCRSessionWrapper;
 import org.jahia.services.content.decorator.JCRSiteNode;
@@ -38,6 +39,7 @@ public class ExactlyMutations extends ExactlyOperations {
     static final int MAX_TRAINING_IMAGES_PER_CALL = 50;
     static final int MAX_PROMPT_LENGTH = 2000;
     static final int MAX_TITLE_LENGTH = 200;
+    static final int MAX_FILE_NAME_LENGTH = 60;
 
     @GraphQLField
     @GraphQLName("syncStyles")
@@ -230,11 +232,18 @@ public class ExactlyMutations extends ExactlyOperations {
             JCRNodeWrapper folder = damService.resolveTargetFolder(session, site, targetFolderPath);
             String fileTitle = title != null && !title.trim().isEmpty()
                     ? truncate(title.trim(), MAX_TITLE_LENGTH) : truncate(generation.getPrompt(), MAX_TITLE_LENGTH);
+            // The file name follows the title (a node name: lower case, dashes); createImage makes it unique
+            String baseName = JCRContentUtils.generateNodeName(fileTitle, MAX_FILE_NAME_LENGTH);
+            if (baseName.isEmpty()) {
+                baseName = "exactly-" + generationId.substring(0, 8);
+            }
 
             Set<Integer> wanted = new LinkedHashSet<>(indices);
             List<String> urls = generation.getUrls();
             int saved = 0;
+            int position = 0;
             for (Integer index : wanted) {
+                position++;
                 if (index == null || index < 0 || index >= urls.size()) {
                     throw new IllegalArgumentException("Invalid image index");
                 }
@@ -245,8 +254,8 @@ public class ExactlyMutations extends ExactlyOperations {
                         logger.warn("Generated image {} has an unexpected type: {}", index, image.getMimeType());
                         continue;
                     }
-                    damService.createImage(folder, "exactly-" + generationId.substring(0, 8) + "-" + (index + 1) + extension,
-                            image.getMimeType(), image.getData(), fileTitle);
+                    String fileName = baseName + (wanted.size() > 1 ? "-" + position : "") + extension;
+                    damService.createImage(folder, fileName, image.getMimeType(), image.getData(), fileTitle);
                     saved++;
                 } catch (java.io.IOException e) {
                     logger.warn("Failed to download generated image {}: {}", index, e.getMessage());

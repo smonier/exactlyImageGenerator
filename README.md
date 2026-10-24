@@ -28,7 +28,8 @@ The app has three steps, shown as tabs in its header:
    unlocks the third step when the style is ready. *Back to draft* reopens a trained style.
 3. **Generation.** A prompt, the number of images (1 to 4), the aspect ratio, and optional
    reference images from the media library (2.5 MB at most each). Select the results to keep, choose
-   a folder of the site's media library (default `files/exactly-generated`) and save. Saved images
+   a folder of the site's media library (default `files/exactly-generated`) and, optionally, a
+   title that also names the files (default: the prompt), then save. Saved images
    are not published: publish them with the page that uses them.
 
 Styles are stored as `eximgynt:style` nodes in `/sites/<site>/contents/exactly-styles`.

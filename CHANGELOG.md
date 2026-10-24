@@ -33,5 +33,7 @@
   a refused file is named with the reason (not an image, larger than 20 MB, Exactly's message).
 - Images under 1024 px on their shortest side are refused before anything is sent, all of them named
   with their size in one message.
+- Saved images are named after the title typed in the Generation step (or the prompt), `-2`, `-3`
+  for several, instead of `exactly-<id>-<n>`.
 - Build: Node 22, Jahia archive repositories, `target/` no longer tracked; dead code, unused
   dependencies and obsolete documents removed; French labels for the content types.

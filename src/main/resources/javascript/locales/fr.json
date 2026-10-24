@@ -151,8 +151,8 @@
     "folderHelper": "Un dossier de la médiathèque de ce site.",
     "defaultFolder": "files/exactly-generated (par défaut)",
     "chooseFolder": "Choisir",
-    "fileTitle": "Titre des fichiers",
-    "fileTitleHelper": "Par défaut, le prompt.",
+    "fileTitle": "Nom et titre des fichiers",
+    "fileTitleHelper": "Donne leur nom aux fichiers (velo-rouge.jpg, puis -2, -3 s'il y en a plusieurs) et leur titre. Par défaut, le prompt.",
     "save": "Enregistrer {{count}} images",
     "saved": "{{saved}} images sur {{requested}} enregistrées dans {{folder}}. Publiez-les quand vous les utilisez dans une page.",
     "saveFailed": "Les images n'ont pas pu être enregistrées : {{message}}"
