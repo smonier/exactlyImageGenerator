@@ -2,6 +2,7 @@
 
 ## 1.1.1 (unreleased)
 
+- The screens use the full width of jContent, with the same margin on both sides (they stopped at 1200 px).
 - The styles list shows each style's first training image, so you can see what a style looks like (an icon when it has none yet), and dates in a short format.
 - Form fields no longer repeat their control's id (the label container had the same id), which screen readers and tests tripped on.
 - Generated images keep their own ratio in the results instead of a letterboxed square.
