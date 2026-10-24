@@ -169,6 +169,17 @@
     overflow-wrap: anywhere;
 }
 
+.styleCell {
+    display: flex;
+    align-items: center;
+    gap: var(--moon-spacing-medium);
+    min-width: 0;
+}
+
+.styleCell > :first-child {
+    flex-shrink: 0;
+}
+
 .statusCell {
     display: flex;
     flex-direction: column;

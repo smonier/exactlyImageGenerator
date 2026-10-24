@@ -26,7 +26,8 @@ library.
 
 The app has three steps, shown as tabs in its header:
 
-1. **Style.** The styles of the site, synchronized from the models of the Exactly.ai account
+1. **Style.** The styles of the site, each with its first training image as a preview,
+   synchronized from the models of the Exactly.ai account
    (*Sync from Exactly.ai*; the app also syncs once when it opens). Create a style with *New
    style*, delete one with the bin (the model is deleted on Exactly.ai too). *Select* opens the
    next step; *Training images* opens a style's training images whatever its status. A style in
@@ -88,6 +89,7 @@ All answers are `{successful, message}`; `message` carries JSON where noted.
 | Field | Arguments | Needs | Answer |
 |---|---|---|---|
 | `Query.exactly.configured` | `siteKey` | access | `true` when the API is configured |
+| `Query.exactly.preview` | `styleUuid` | access | URL of the style's first training image, or empty |
 | `Query.exactly.trainingImages` | `styleUuid` | access | JSON array of `{id, url, width, height}` |
 | `Query.exactly.trainingProgress` | `styleUuid` | access | JSON `{status, progress}` |
 | `Query.exactly.model` | `styleUuid` | access | JSON `{id, name, status}` |

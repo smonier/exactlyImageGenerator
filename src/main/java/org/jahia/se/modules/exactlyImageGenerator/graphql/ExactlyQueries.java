@@ -9,6 +9,8 @@ import org.jahia.services.content.JCRSessionWrapper;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.Map;
+
 /**
  * Read-only Exactly fields, under {@code Query.exactly}. Each one checks that the caller may use the
  * module on the site of the style ({@code jContentAccess}). Answers carry the Exactly data as JSON in
@@ -39,6 +41,25 @@ public class ExactlyQueries extends ExactlyOperations {
                 return success("[]");
             }
             return success(new JSONArray(exactlyService.getTrainingImages(exactlyId)).toString());
+        });
+    }
+
+    @GraphQLField
+    @GraphQLName("preview")
+    @GraphQLDescription("URL of the first training image of a style, to show what it looks like; empty message when it has none")
+    public ExactlySyncResponse getPreview(@GraphQLName("styleUuid") @GraphQLNonNull String styleUuid) {
+        return run("preview", () -> {
+            String exactlyId = exactlyId(styleUuid);
+            if (exactlyId == null) {
+                return success("");
+            }
+            for (Map<String, Object> image : exactlyService.getTrainingImages(exactlyId)) {
+                Object url = image.get("url");
+                if (url instanceof String && ((String) url).startsWith("https://")) {
+                    return success((String) url);
+                }
+            }
+            return success("");
         });
     }
 

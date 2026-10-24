@@ -43,6 +43,12 @@ export const TRAINING_PROGRESS = gql`
     }
 `;
 
+export const PREVIEW = gql`
+    query ExactlyPreview($styleUuid: String!) {
+        exactly { preview(styleUuid: $styleUuid) { ${RESPONSE} } }
+    }
+`;
+
 export const TRAINING_IMAGES = gql`
     query ExactlyTrainingImages($styleUuid: String!) {
         exactly { trainingImages(styleUuid: $styleUuid) { ${RESPONSE} } }

@@ -23,6 +23,7 @@ import {NS, STATUS} from '../constants';
 import {CREATE_STYLE, DELETE_STYLE, STYLES, SYNC_STYLES, errorMessage, readAnswer} from '../graphql';
 import {Section} from '../ui/Section';
 import {StatusCell} from '../ui/StatusCell';
+import {StylePreview} from '../ui/StylePreview';
 import {ConfirmModal} from '../ui/ConfirmModal';
 import classes from '../ui/layout.module.css';
 
@@ -118,17 +119,20 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
         }
     };
 
-    const formatDate = value => (value ? new Date(value).toLocaleString(uilang || undefined) : '-');
+    const formatDate = value => (value ? new Date(value).toLocaleString(uilang || undefined, {dateStyle: 'short', timeStyle: 'short'}) : '-');
 
     const columns = [
         {
             key: 'name',
             label: t('styles.columns.name'),
-            width: '32%',
+            width: '34%',
             render: ({data: row}) => (
-                <div className={classes.cellText}>
-                    <Typography weight="semiBold">{row.name}</Typography>
-                    {row.description && <Typography variant="caption">{row.description}</Typography>}
+                <div className={classes.styleCell}>
+                    <StylePreview styleUuid={row.uuid} name={row.name}/>
+                    <div className={classes.cellText}>
+                        <Typography weight="semiBold">{row.name}</Typography>
+                        {row.description && <Typography variant="caption">{row.description}</Typography>}
+                    </div>
                 </div>
             )
         },
@@ -141,7 +145,7 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
         {
             key: 'lastSynced',
             label: t('styles.columns.lastSynced'),
-            width: '20%',
+            width: '18%',
             render: ({value}) => <Typography variant="caption">{formatDate(value)}</Typography>
         },
         {
