@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.1 (unreleased)
+
+- Form fields no longer repeat their control's id (the label container had the same id), which screen readers and tests tripped on.
+- Generated images keep their own ratio in the results instead of a letterboxed square.
+- The file name example in the Generation step reads `red-bicycle.jpg`.
+
 ## 1.1.0 (2026-10-24)
 
 ### Security

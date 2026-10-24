@@ -125,7 +125,7 @@ const GenerateTab = ({siteKey, language, uilang, style, onError, notify}) => {
     return (
         <>
             <Section title={t('generate.title')} description={t('generate.description', {name: style.name})}>
-                <Field id="exactly-prompt" label={t('generate.prompt')} helper={t('generate.promptHelper', {count: prompt.length, max: MAX_PROMPT_LENGTH})}>
+                <Field id="exactly-prompt-field" label={t('generate.prompt')} helper={t('generate.promptHelper', {count: prompt.length, max: MAX_PROMPT_LENGTH})}>
                     <Textarea id="exactly-prompt"
                               value={prompt}
                               rows={4}
@@ -135,11 +135,11 @@ const GenerateTab = ({siteKey, language, uilang, style, onError, notify}) => {
                               onChange={e => setPrompt(e.target.value)}/>
                 </Field>
                 <div className={classes.fields}>
-                    <Field id="exactly-count" label={t('generate.count')}>
+                    <Field id="exactly-count-field" label={t('generate.count')}>
                         <Dropdown id="exactly-count" variant="outlined" data={countOptions} value={count} isDisabled={generating}
                                   onChange={(e, item) => setCount(item.value)}/>
                     </Field>
-                    <Field id="exactly-ratio" label={t('generate.ratio')}>
+                    <Field id="exactly-ratio-field" label={t('generate.ratio')}>
                         <Dropdown id="exactly-ratio" variant="outlined" data={ratioOptions} value={ratio} isDisabled={generating}
                                   onChange={(e, item) => setRatio(item.value)}/>
                     </Field>
@@ -163,13 +163,13 @@ const GenerateTab = ({siteKey, language, uilang, style, onError, notify}) => {
                             <div key={ref.key} className={classes.referenceRow}>
                                 <img className={classes.referenceImage} src={ref.previewUrl} alt={ref.name || ''}/>
                                 <div className={classes.fields}>
-                                    <Field id={`exactly-ref-purpose-${index}`} label={t('generate.reference.purpose', {index: index + 1})}>
+                                    <Field id={`exactly-ref-purpose-${index}-field`} label={t('generate.reference.purpose', {index: index + 1})}>
                                         <Dropdown id={`exactly-ref-purpose-${index}`} variant="outlined" data={purposeOptions} value={ref.purpose}
                                                   isDisabled={generating}
                                                   onChange={(e, item) => updateReference(ref.key, {purpose: item.value})}/>
                                     </Field>
                                     {ref.purpose === 'sketch' && (
-                                        <Field id={`exactly-ref-strength-${index}`} label={t('generate.reference.strength')} helper={t('generate.reference.strengthHelper')}>
+                                        <Field id={`exactly-ref-strength-${index}-field`} label={t('generate.reference.strength')} helper={t('generate.reference.strengthHelper')}>
                                             <NumberInput id={`exactly-ref-strength-${index}`} value={ref.strength} min={0} max={1} step={0.1} allowDecimal
                                                          isDisabled={generating}
                                                          onChange={e => updateReference(ref.key, {strength: e.target.value})}/>
@@ -224,14 +224,14 @@ const GenerateTab = ({siteKey, language, uilang, style, onError, notify}) => {
                     </ul>
 
                     <div className={classes.fields}>
-                        <Field id="exactly-folder" label={t('generate.folder')} helper={t('generate.folderHelper')}>
+                        <Field id="exactly-folder-field" label={t('generate.folder')} helper={t('generate.folderHelper')}>
                             <div className={classes.inlineForm}>
                                 <Input id="exactly-folder" className={classes.inlineInput} isReadOnly
                                        value={folder?.path || t('generate.defaultFolder')}/>
                                 <Button icon={<Folder/>} variant="outlined" label={t('generate.chooseFolder')} onClick={pickFolder}/>
                             </div>
                         </Field>
-                        <Field id="exactly-title" label={t('generate.fileTitle')} helper={t('generate.fileTitleHelper')}>
+                        <Field id="exactly-title-field" label={t('generate.fileTitle')} helper={t('generate.fileTitleHelper')}>
                             <Input id="exactly-title" value={title} maxLength={200} onChange={e => setTitle(e.target.value)}/>
                         </Field>
                     </div>

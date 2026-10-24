@@ -10,6 +10,18 @@ library.
 - **Where:** jContent, *Additional* accordion, *Exactly.ai Image Generator*, on sites that enable
   the module.
 
+**Latest release:** [1.1.0](https://github.com/smonier/exactlyImageGenerator/releases/tag/exactlyImageGenerator-1.1.0) (2026-10-24), see the [changelog](CHANGELOG.md).
+
+## Screenshots
+
+| Styles | Training images |
+|---|---|
+| ![Styles, one of them in training](docs/images/01-styles.png) | ![Training images of a ready style](docs/images/02-training.png) |
+
+| Generation | Saved to the media library |
+|---|---|
+| ![Results of a generation, ready to save](docs/images/03-generate.png) | ![Images saved, with the prompt and options](docs/images/04-saved.png) |
+
 ## Using it
 
 The app has three steps, shown as tabs in its header:

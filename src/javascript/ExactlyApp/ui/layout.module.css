@@ -228,7 +228,9 @@
 }
 
 .resultImage {
-    object-fit: contain;
+    /* Generated images keep their own ratio (16:9, 9:16...) instead of a letterboxed square */
+    aspect-ratio: auto;
+    height: auto;
 }
 
 .tileBar {

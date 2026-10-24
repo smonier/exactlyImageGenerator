@@ -232,14 +232,14 @@ const StylesTab = ({siteKey, uilang, style, canCallExactly, onSelect, onOpenTrai
                     <ModalHeader title={t('styles.createTitle')}/>
                     <ModalBody>
                         <div className={classes.stack}>
-                            <Field id="exactly-style-name" label={t('styles.name')} helper={t('styles.nameHelper')}>
+                            <Field id="exactly-style-name-field" label={t('styles.name')} helper={t('styles.nameHelper')}>
                                 <Input id="exactly-style-name"
                                        value={newName}
                                        maxLength={200}
                                        placeholder={t('styles.namePlaceholder')}
                                        onChange={e => setNewName(e.target.value)}/>
                             </Field>
-                            <Field id="exactly-style-description" label={t('styles.descriptionLabel')}>
+                            <Field id="exactly-style-description-field" label={t('styles.descriptionLabel')}>
                                 <Textarea id="exactly-style-description"
                                           value={newDescription}
                                           rows={3}

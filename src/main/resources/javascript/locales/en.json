@@ -152,7 +152,7 @@
     "defaultFolder": "files/exactly-generated (default)",
     "chooseFolder": "Choose",
     "fileTitle": "File name and title",
-    "fileTitleHelper": "Names the files (bicycle-red.jpg, then -2, -3 for several) and sets their title. Defaults to the prompt.",
+    "fileTitleHelper": "Names the files (red-bicycle.jpg, then -2, -3 for several) and sets their title. Defaults to the prompt.",
     "save": "Save {{count}} images",
     "saved": "{{saved}} of {{requested}} images saved to {{folder}}. Publish them when you use them on a page.",
     "saveFailed": "The images could not be saved: {{message}}"
