@@ -125,3 +125,7 @@ manager, then enable the module on a site and set the token.
 - Messages coming from the server (Exactly.ai errors, upload counts) are in English.
 - Generations are remembered in memory: after 6 hours, a restart or on another cluster node, generate
   again before saving.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
