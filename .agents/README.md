@@ -12,7 +12,10 @@ Generic Jahia knowledge (OSGi, GraphQL security, Moonstone, build) lives in
   `ExactlyOperations.run` and resolves its node with `access.require*`. Never add a system session.
 - Generated image URLs are only trusted through `GeneratedImageRegistry`; never accept a URL from
   the browser.
-- Build with Maven 3.8: `mvn clean install`.
+- Every generated image goes through `services/AiOriginXmp.mark` before `DamService.createImage`
+  (AIStartupKit rule 33): never save the bytes Exactly.ai returned without it. A new format the
+  module accepts needs a writer there and a fixture in `AiOriginXmpTest`.
+- Build with Maven 3.8: `mvn clean install` (runs the unit tests).
 
 ## Testing without an Exactly.ai account
 

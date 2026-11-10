@@ -105,6 +105,14 @@
             <scope>provided</scope>
         </dependency>
         
+        <!-- Unit tests -->
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+
         <!-- JCR API -->
         <dependency>
             <groupId>javax.jcr</groupId>
