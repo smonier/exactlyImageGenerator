@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- Every image saved to the media library says in its own metadata that a model made it (EU AI Act
+  Article 50(2)): XMP `Iptc4xmpExt:DigitalSourceType` `trainedAlgorithmicMedia`, with
+  `Iptc4xmpExt:AISystemUsed` (`Exactly.ai`), `Iptc4xmpExt:AISystemVersionUsed` (the Exactly.ai model
+  id) and `xmp:CreateDate`. Written into the JPEG, PNG or WebP bytes without re-encoding, an existing
+  XMP packet kept; an image that cannot be marked is not saved. No new dependency (`Import-Package`
+  unchanged from 1.1.1).
+- First unit tests (JUnit 4): each format is marked, read back with the JDK's ImageIO metadata or a
+  RIFF walk, and its pixels compared with the original.
+
 ## 1.1.1 (2026-10-24)
 
 - The screens use the full width of jContent, with the same margin on both sides (they stopped at 1200 px).

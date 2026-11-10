@@ -5,6 +5,7 @@ import graphql.annotations.annotationTypes.GraphQLField;
 import graphql.annotations.annotationTypes.GraphQLName;
 import graphql.annotations.annotationTypes.GraphQLNonNull;
 import org.jahia.se.modules.exactlyImageGenerator.proxy.ExactlyProxyClient;
+import org.jahia.se.modules.exactlyImageGenerator.services.AiOriginXmp;
 import org.jahia.se.modules.exactlyImageGenerator.services.DamService;
 import org.jahia.se.modules.exactlyImageGenerator.services.GeneratedImageRegistry;
 import org.jahia.se.modules.exactlyImageGenerator.services.JcrStyleRepository;
@@ -40,6 +41,8 @@ public class ExactlyMutations extends ExactlyOperations {
     static final int MAX_PROMPT_LENGTH = 2000;
     static final int MAX_TITLE_LENGTH = 200;
     static final int MAX_FILE_NAME_LENGTH = 60;
+    /** AI system written into the XMP of every generated image ({@code Iptc4xmpExt:AISystemUsed}). */
+    static final String AI_SYSTEM = "Exactly.ai";
 
     @GraphQLField
     @GraphQLName("syncStyles")
@@ -238,7 +241,10 @@ public class ExactlyMutations extends ExactlyOperations {
                 return failure("This generation has expired: generate the images again");
             }
             // The generation was allowed on this site; the caller must still be allowed now
-            access.requireStyle(session, generation.getStyleUuid(), true);
+            JCRNodeWrapper style = access.requireStyle(session, generation.getStyleUuid(), true);
+            // Every saved image says it was made by a model, in its own XMP (EU AI Act Article 50(2))
+            AiOriginXmp.Origin origin = new AiOriginXmp.Origin(AI_SYSTEM, styleRepository.getExactlyId(style),
+                    generation.getCreatedAt());
             JCRSiteNode site = access.requireSite(session, generation.getSiteKey(), true);
             JCRNodeWrapper folder = damService.resolveTargetFolder(session, site, targetFolderPath);
             String fileTitle = title != null && !title.trim().isEmpty()
@@ -265,8 +271,16 @@ public class ExactlyMutations extends ExactlyOperations {
                         logger.warn("Generated image {} has an unexpected type: {}", index, image.getMimeType());
                         continue;
                     }
+                    byte[] marked;
+                    try {
+                        marked = AiOriginXmp.mark(image.getData(), image.getMimeType(), origin);
+                    } catch (AiOriginXmp.MarkingException e) {
+                        // An image that cannot say it was generated is not stored
+                        logger.warn("Generated image {} not saved, it cannot be marked as AI-generated: {}", index, e.getMessage());
+                        continue;
+                    }
                     String fileName = baseName + (wanted.size() > 1 ? "-" + position : "") + extension;
-                    damService.createImage(folder, fileName, image.getMimeType(), image.getData(), fileTitle);
+                    damService.createImage(folder, fileName, image.getMimeType(), marked, fileTitle);
                     saved++;
                 } catch (java.io.IOException e) {
                     logger.warn("Failed to download generated image {}: {}", index, e.getMessage());

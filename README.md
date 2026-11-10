@@ -46,9 +46,30 @@ The app has three steps, shown as tabs in its header:
    reference images from the media library (2.5 MB at most each). Select the results to keep, choose
    a folder of the site's media library (default `files/exactly-generated`) and, optionally, a
    title that also names the files (default: the prompt), then save. Saved images
-   are not published: publish them with the page that uses them.
+   are not published: publish them with the page that uses them. Each saved image says in its
+   own metadata that a model made it (see below).
 
 Styles are stored as `eximgynt:style` nodes in `/sites/<site>/contents/exactly-styles`.
+
+## Generated images are marked as AI-generated
+
+Every image saved to the media library carries, in the file itself, XMP metadata that a program can
+read (EU AI Act Article 50(2)), so the mark travels with the image wherever it is published:
+
+| XMP property | Value |
+|---|---|
+| `Iptc4xmpExt:DigitalSourceType` | `http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia` |
+| `Iptc4xmpExt:AISystemUsed` | `Exactly.ai` |
+| `Iptc4xmpExt:AISystemVersionUsed` | the Exactly.ai model id of the style |
+| `xmp:CreateDate` | when Exactly.ai returned the image |
+
+The packet is written into the bytes Exactly.ai returned, without re-encoding: an `APP1` segment in a
+JPEG, an `iTXt` chunk (`XML:com.adobe.xmp`) in a PNG, an `XMP ` chunk in a WebP (a simple WebP becomes
+the extended `VP8X` format). An XMP packet already in the image is kept and the mark added to it; a
+digital source type already there is left as the generator wrote it. An image that cannot be marked
+is not saved (logged as a warning). The prompt is not written into the file. Read the mark with
+`exiftool -XMP-iptcExt:DigitalSourceType <file>`. The field is not signed (no C2PA manifest): it is a
+first step, not full compliance with the Code of Practice on marking and labelling.
 
 ## Configuration
 
@@ -122,7 +143,8 @@ manager, then enable the module on a site and set the token.
 
 ## Known limitations
 
-- No automated tests yet (Cypress specs for every refusal and success path are the next step).
+- Unit tests cover only the AI-origin XMP marking (`mvn clean install` runs them); Cypress specs for
+  every refusal and success path are the next step.
 - No CI build or release workflow; releases have been built locally.
 - `eximgynt:style` and `eximgynt:project` are editorial, visible types: editors can edit style
   nodes in jContent and desynchronize them. `eximgynt:project` is unused. Hiding or removing them is

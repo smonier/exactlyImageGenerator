@@ -61,6 +61,11 @@ public class GeneratedImageRegistry {
         public List<String> getUrls() {
             return urls;
         }
+
+        /** When Exactly returned the images. */
+        public java.time.Instant getCreatedAt() {
+            return java.time.Instant.ofEpochMilli(createdAt);
+        }
     }
 
     private final Map<String, Generation> generations = new ConcurrentHashMap<>();
